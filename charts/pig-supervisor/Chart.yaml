@@ -1,0 +1,6 @@
+apiVersion: v2
+name: pig-supervisor
+description: PIG release supervision for one customer deployment in one existing namespace
+type: application
+version: 0.3.0
+appVersion: 0.3.0

@@ -1,0 +1,84 @@
+{{- if .Values.migrationJob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "instruction-hub-worker.fullname" . }}-migrate
+  labels:
+    {{- include "instruction-hub-worker.labels" . | nindent 4 }}
+    {{- include "instruction-hub-worker.datadogLabels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        app.kubernetes.io/component: maintenance
+        app.kubernetes.io/name: {{ include "instruction-hub-worker.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- include "instruction-hub-worker.datadogLabels" . | nindent 8 }}
+      {{- if .Values.observability.datadog.enabled }}
+      annotations:
+        ad.datadoghq.com/migrate.logs: {{ printf "[{\"source\":\"python\",\"service\":%q}]" .Values.observability.datadog.service | quote }}
+      {{- end }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ default "default" .Values.migrationJob.serviceAccountName | quote }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: {{ include "instruction-hub-worker.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["migrate"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: INSTRUCTION_HUB_RUNTIME_BASE_URL
+              value: {{ required "instructionHub.runtimeBaseUrl is required" .Values.instructionHub.runtimeBaseUrl | quote }}
+            - name: INSTRUCTION_HUB_DEPLOYMENT_NAME
+              value: {{ .Values.instructionHub.deploymentName | quote }}
+            - name: INSTRUCTION_HUB_DEPLOYMENT_INSTANCE_ID
+              value: {{ required "instructionHub.deploymentInstanceId is required" .Values.instructionHub.deploymentInstanceId | quote }}
+            - name: INSTRUCTION_HUB_CHART_VERSION
+              value: {{ .Chart.Version | quote }}
+            - name: INSTRUCTION_HUB_CONFIG_HASH
+              value: {{ required "instructionHub.configHash is required" .Values.instructionHub.configHash | quote }}
+            {{- include "instruction-hub-worker.storageEnv" . | nindent 12 }}
+            - name: INSTRUCTION_HUB_LOG_LEVEL
+              value: {{ .Values.instructionHub.logLevel | default "INFO" | quote }}
+            {{- include "instruction-hub-worker.observabilityEnv" . | nindent 12 }}
+            - name: INSTRUCTION_HUB_INSTALL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "instruction-hub-worker.secretName" . }}
+                  key: {{ .Values.secrets.installTokenKey }}
+            - name: INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "instruction-hub-worker.secretName" . }}
+                  key: {{ .Values.secrets.customerPostgresDsnKey }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "instruction-hub-worker.caMount" . | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- include "instruction-hub-worker.caVolume" . | nindent 8 }}
+{{- end }}

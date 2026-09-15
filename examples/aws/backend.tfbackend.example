@@ -1,0 +1,4 @@
+bucket = "REPLACE_EXISTING_PRIVATE_VERSIONED_STATE_BUCKET"
+key = "pig/acme/terraform.tfstate"
+region = "us-east-1"
+kms_key_id = "REPLACE_STATE_KMS_KEY_ARN"

@@ -1,0 +1,4 @@
+resource_group_name = "REPLACE_STATE_RESOURCE_GROUP"
+storage_account_name = "REPLACE_PRIVATE_STATE_ACCOUNT"
+container_name = "tfstate"
+key = "pig/acme.tfstate"

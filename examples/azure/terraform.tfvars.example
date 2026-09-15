@@ -1,0 +1,15 @@
+name = "acme-pig"
+namespace = "pig"
+service_account_name = "pig-analyzer"
+trace_prefix = "acme/traces"
+# Supply TF_VAR_postgres_password through your approved secret workflow.
+# Review sizing, HA, deletion protection, and recovery defaults in variables.tf.
+subscription_id = "REPLACE_SUBSCRIPTION"
+location = "eastus2"
+resource_group_name = "REPLACE_EXISTING_GROUP"
+oidc_issuer_url = "https://REPLACE_AKS_ISSUER/"
+postgres_subnet_id = "REPLACE_DELEGATED_SUBNET_ID"
+postgres_private_dns_zone_id = "REPLACE_LINKED_POSTGRES_ZONE_ID"
+private_endpoint_subnet_id = "REPLACE_ENDPOINT_SUBNET_ID"
+blob_private_dns_zone_id = "REPLACE_LINKED_BLOB_ZONE_ID"
+storage_account_name = "REPLACE_UNIQUE_ACCOUNT"

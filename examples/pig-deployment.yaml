@@ -1,0 +1,45 @@
+apiVersion: governance.promptless.ai/v1alpha1
+kind: PIGDeployment
+metadata:
+  name: acme
+  namespace: pig
+spec:
+  release:
+    channel: stable
+    paused: false
+    pinnedVersion: ""
+    confirmation:
+      configMapRef: pig-release-confirmation
+  serviceAccountName: pig-analyzer
+  podLabels: {} # Copy deployment_configuration.pod_labels, including Azure identity labels.
+  hosted:
+    runtimeURL: https://api.promptless.ai
+    deploymentID: REPLACE_HOSTED_DEPLOYMENT_ID
+    installTokenSecretRef: {name: pig-credentials, key: install-token}
+  endpoint:
+    hostname: pig.example.com
+    ingressClassName: nginx
+    tlsSecretName: pig-tls
+  storage:
+    postgres:
+      dsnSecretRef: {name: pig-credentials, key: postgres-dsn}
+      caConfigMapRef: {name: pig-postgres-ca, key: ca.pem}
+    # Replace with exactly one storage block from the Terraform output.
+    s3:
+      region: us-east-1
+      bucket: replace-customer-bucket
+      prefix: acme/traces
+  analysis:
+    activationAt: "2026-09-15T00:00:00Z" # Set your intended start time.
+    quietWindowHours: 0.5
+    repository:
+      url: https://github.com/example/instructions.git
+      id: 123
+      fullName: example/instructions
+      tokenSecretRef: {name: pig-credentials, key: repository-token}
+    model:
+      provider: openai
+      authentication: api_key
+      baseURL: https://api.openai.com/v1
+      name: REPLACE_SUPPORTED_MODEL
+      apiKeySecretRef: {name: pig-credentials, key: model-api-key}

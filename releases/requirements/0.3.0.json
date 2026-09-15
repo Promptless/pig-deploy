@@ -1,0 +1,14 @@
+{
+  "kubernetesMin": "1.30.0",
+  "postgresMin": 15,
+  "postgresMax": 18,
+  "operatorCapacityRequirements": [],
+  "capacityConfirmationMaxAgeHours": 24,
+  "storageBackends": ["s3", "azureBlob", "gcs"],
+  "capabilities": ["native-storage-v1", "migration-ledger-v1", "controller-self-update-v1", "crd-update-v1"],
+  "recoveryMaxAgeHours": null,
+  "destructiveMigration": false,
+  "schemaFrom": [0, 1],
+  "schemaTo": 1,
+  "controllerProtocol": 1
+}

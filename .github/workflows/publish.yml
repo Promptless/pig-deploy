@@ -1,0 +1,130 @@
+name: Publish accepted deployment release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Accepted canonical version with reviewed releases/acceptance/VERSION.json on main
+        required: true
+        type: string
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+concurrency:
+  group: pig-release-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    environment: pig-release
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Locate temporary release artifacts
+        run: printf 'RELEASE_OUTPUT=%s\nEVIDENCE=%s\n' "$RUNNER_TEMP/pig-release" "$RUNNER_TEMP/pig-acceptance.json" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: '0.8.22'
+      - uses: azure/setup-helm@bf6a7d304bc2fdb57e0331155b7ebf2c504acf0a # v4
+        with:
+          version: v3.18.6
+      - name: Read reviewed evidence before selecting the accepted source
+        id: evidence
+        run: |
+          uv sync --frozen
+          uv run python -c 'import os; from pig_supervisor.models import stable_version; stable_version(os.environ["VERSION"])'
+          cp "releases/acceptance/$VERSION.json" "$EVIDENCE"
+          uv run pig-release evidence --version "$VERSION" --evidence "$EVIDENCE"
+      - name: Select exact accepted source without moving a release tag
+        env:
+          SOURCE_COMMIT: ${{ steps.evidence.outputs.source_commit }}
+        run: |
+          git merge-base --is-ancestor "$SOURCE_COMMIT" origin/main
+          if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
+            test "$(git rev-parse "refs/tags/v$VERSION^{commit}")" = "$SOURCE_COMMIT"
+          fi
+          git checkout --detach "$SOURCE_COMMIT"
+          uv sync --frozen
+      - name: Verify anonymous runtime images and their deployment contract
+        env:
+          ANALYZER_IMAGE: ${{ steps.evidence.outputs.analyzer_image }}
+          SUPERVISOR_IMAGE: ${{ steps.evidence.outputs.supervisor_image }}
+          SOURCE_COMMIT: ${{ steps.evidence.outputs.source_commit }}
+        run: |
+          DOCKER_CONFIG="$(mktemp -d)"
+          export DOCKER_CONFIG
+          docker pull "$ANALYZER_IMAGE"
+          docker pull "$SUPERVISOR_IMAGE"
+          test "$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$SUPERVISOR_IMAGE")" = "$SOURCE_COMMIT"
+          test "$(docker run --rm "$SUPERVISOR_IMAGE" --version)" = "$VERSION"
+          mkdir -p "$RELEASE_OUTPUT"
+          docker run --rm "$ANALYZER_IMAGE" deployment-capabilities > "$RELEASE_OUTPUT/worker-capabilities.json"
+      - name: Package only accepted immutable artifacts
+        run: |
+          uv run pig-release package --version "$VERSION" --evidence "$EVIDENCE" --requirements "releases/requirements/$VERSION.json" --capabilities "$RELEASE_OUTPUT/worker-capabilities.json" --output "$RELEASE_OUTPUT"
+      - name: Refuse replacement of published chart bytes
+        id: charts
+        run: uv run pig-release chart-status --version "$VERSION" --evidence "$EVIDENCE" --requirements "releases/requirements/$VERSION.json" --output "$RELEASE_OUTPUT"
+      - name: Publish versioned OCI chart packages
+        env:
+          PUBLISH_SUPERVISOR: ${{ steps.charts.outputs.pig-supervisor }}
+          PUBLISH_WORKER: ${{ steps.charts.outputs.instruction-hub-worker }}
+        run: |
+          printf '%s' "$GH_TOKEN" | helm registry login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if test "$PUBLISH_SUPERVISOR" = true; then
+            helm push "$RELEASE_OUTPUT/pig-supervisor-$VERSION.tgz" oci://ghcr.io/promptless/charts
+          fi
+          if test "$PUBLISH_WORKER" = true; then
+            helm push "$RELEASE_OUTPUT/instruction-hub-worker-$VERSION.tgz" oci://ghcr.io/promptless/charts
+          fi
+      - name: Require anonymous chart pulls and catalog integrity
+        run: |
+          HELM_REGISTRY_CONFIG="$(mktemp)"
+          export HELM_REGISTRY_CONFIG
+          mkdir -p "$RELEASE_OUTPUT/anonymous"
+          for chart in pig-supervisor instruction-hub-worker; do
+            helm pull "oci://ghcr.io/promptless/charts/$chart" --version "$VERSION" --destination "$RELEASE_OUTPUT/anonymous"
+            cmp "$RELEASE_OUTPUT/$chart-$VERSION.tgz" "$RELEASE_OUTPUT/anonymous/$chart-$VERSION.tgz"
+          done
+          uv run pig-release assemble --version "$VERSION" --evidence "$EVIDENCE" --requirements "releases/requirements/$VERSION.json" --output "$RELEASE_OUTPUT"
+      - name: Publish immutable source tag and checksummed module archive
+        env:
+          SOURCE_COMMIT: ${{ steps.evidence.outputs.source_commit }}
+        run: |
+          if ! git show-ref --verify --quiet "refs/tags/v$VERSION"; then
+            git tag "v$VERSION" "$SOURCE_COMMIT"
+            git push origin "refs/tags/v$VERSION"
+          fi
+          printf 'Accepted PIG deployment artifacts. Source: %s. Verify SHA256SUMS and catalog manifest digests.\n' "$SOURCE_COMMIT" > "$RELEASE_OUTPUT/notes.md"
+          if ! gh release view "v$VERSION" > /dev/null 2>&1; then
+            gh release create "v$VERSION" --verify-tag --title "PIG deployment $VERSION" --notes-file "$RELEASE_OUTPUT/notes.md" "$RELEASE_OUTPUT/pig-deploy-$VERSION.tar.gz" "$RELEASE_OUTPUT/SHA256SUMS" "$RELEASE_OUTPUT/pig-supervisor-$VERSION.tgz" "$RELEASE_OUTPUT/instruction-hub-worker-$VERSION.tgz" "$RELEASE_OUTPUT/release.json"
+          fi
+      - name: Verify anonymous source archive and release inventory
+        run: |
+          for file in "pig-deploy-$VERSION.tar.gz" SHA256SUMS "pig-supervisor-$VERSION.tgz" "instruction-hub-worker-$VERSION.tgz" release.json; do
+            curl --fail --silent --show-error --location "https://github.com/Promptless/pig-deploy/releases/download/v$VERSION/$file" --output "$RELEASE_OUTPUT/anonymous/$file"
+            cmp "$RELEASE_OUTPUT/$file" "$RELEASE_OUTPUT/anonymous/$file"
+          done
+          cd "$RELEASE_OUTPUT/anonymous"
+          sha256sum --check SHA256SUMS
+      - name: Open an immutable catalog promotion draft
+        run: |
+          git switch -c "release/catalog-$VERSION" origin/main
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          mkdir -p catalog/releases
+          cp "$RELEASE_OUTPUT/release.json" "catalog/releases/$VERSION.json"
+          git add "catalog/releases/$VERSION.json"
+          git commit -m "Add immutable manifest for PIG $VERSION"
+          manifest_commit="$(git rev-parse HEAD)"
+          uv run pig-release promote --version "$VERSION" --manifest "catalog/releases/$VERSION.json" --manifest-commit "$manifest_commit"
+          git add catalog/stable.json
+          git commit -m "Select PIG $VERSION in the stable catalog"
+          git push -u origin "release/catalog-$VERSION"
+          printf 'Promote the accepted PIG %s release. Both runtime images, chart packages, and source archive passed anonymous access checks. Three-cloud acceptance evidence is in releases/acceptance/%s.json. Merging this catalog entry makes the release eligible for automatic updates, including major upgrades.\n' "$VERSION" "$VERSION" > "$RELEASE_OUTPUT/pr.md"
+          gh pr create --draft --base main --head "release/catalog-$VERSION" --title "Promote PIG $VERSION to stable" --body-file "$RELEASE_OUTPUT/pr.md"

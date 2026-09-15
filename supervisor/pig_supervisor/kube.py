@@ -1,0 +1,156 @@
+"""Small Kubernetes REST client with projected-token refresh and optimistic locking."""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from pathlib import Path
+from time import monotonic
+from urllib.parse import quote
+
+import httpx
+
+GROUP = "governance.promptless.ai/v1alpha1"
+PLURALS = {
+    "Deployment": ("apps/v1", "deployments"),
+    "Service": ("v1", "services"),
+    "Ingress": ("networking.k8s.io/v1", "ingresses"),
+    "Job": ("batch/v1", "jobs"),
+    "ConfigMap": ("v1", "configmaps"),
+    "Secret": ("v1", "secrets"),
+    "ServiceAccount": ("v1", "serviceaccounts"),
+    "Lease": ("coordination.k8s.io/v1", "leases"),
+    "Pod": ("v1", "pods"),
+    "PIGDeployment": (GROUP, "pigdeployments"),
+    "HelmRelease": ("helm.toolkit.fluxcd.io/v2", "helmreleases"),
+}
+
+
+class KubeError(RuntimeError):
+    def __init__(self, status: int) -> None:
+        super().__init__(f"Kubernetes API returned {status}")
+        self.status = status
+
+
+def resource_path(kind: str, namespace: str, name: str = "") -> str:
+    version, plural = PLURALS[kind]
+    prefix = "/api/" if version == "v1" else "/apis/"
+    return f"{prefix}{version}/namespaces/{quote(namespace, safe='')}/{plural}" + (
+        f"/{quote(name, safe='')}" if name else ""
+    )
+
+
+class Kube:
+    def __init__(self, client: httpx.Client, token_path: Path | None = None) -> None:
+        self.client = client
+        self.token_path = token_path
+        self.lease_deadline = 0.0
+
+    def request(self, method: str, path: str, **kwargs) -> dict:
+        if method != "GET" and "/leases" not in path and monotonic() >= self.lease_deadline:
+            raise KubeError(409)  # Stop writing before another controller can acquire the Lease.
+        headers = kwargs.pop("headers", {})
+        if self.token_path:
+            headers["Authorization"] = "Bearer " + self.token_path.read_text().strip()
+        response = self.client.request(method, path, headers=headers, **kwargs)
+        if not response.is_success:
+            raise KubeError(response.status_code)
+        return response.json()
+
+    def get(self, kind: str, namespace: str, name: str) -> dict | None:
+        try:
+            return self.request("GET", resource_path(kind, namespace, name))
+        except KubeError as exc:
+            if exc.status == 404:
+                return None
+            raise
+
+    def list(self, kind: str, namespace: str, selector: str = "") -> list[dict]:
+        return self.request("GET", resource_path(kind, namespace), params={"labelSelector": selector}).get("items", [])
+
+    def apply(self, document: dict) -> dict:
+        metadata = document["metadata"]
+        path = resource_path(document["kind"], metadata["namespace"], metadata["name"])
+        existing = self.get(document["kind"], metadata["namespace"], metadata["name"])
+        if existing:
+            expected = metadata.get("ownerReferences", [])
+            actual = existing["metadata"].get("ownerReferences", [])
+            if expected and not any(owner.get("uid") == expected[0]["uid"] for owner in actual):
+                raise KubeError(409)  # Never adopt customer/GitOps-owned resources.
+        return self.request(
+            "PATCH",
+            path,
+            json=document,
+            params={"fieldManager": "pig-supervisor", "force": "false"},
+            headers={"Content-Type": "application/apply-patch+yaml"},
+        )
+
+    def patch(self, kind: str, namespace: str, name: str, patch: dict) -> dict:
+        return self.request(
+            "PATCH",
+            resource_path(kind, namespace, name),
+            json=patch,
+            headers={
+                "Content-Type": "application/strategic-merge-patch+json"
+                if kind == "Deployment"
+                else "application/merge-patch+json"
+            },
+        )
+
+    def status(self, deployment: dict, status: dict) -> None:
+        metadata = deployment["metadata"]
+        self.request(
+            "PATCH",
+            resource_path("PIGDeployment", metadata["namespace"], metadata["name"]) + "/status",
+            json={"metadata": {"resourceVersion": metadata["resourceVersion"]}, "status": status},
+            headers={"Content-Type": "application/merge-patch+json"},
+        )
+
+    def leadership(self, namespace: str, holder: str, now: datetime) -> bool:
+        """A fixed namespace Lease also prevents two separately installed supervisors acting at once."""
+        name = "pig-supervisor"
+        started = monotonic()
+        self.lease_deadline = 0.0
+        lease = self.get("Lease", namespace, name)
+        spec = {
+            "holderIdentity": holder,
+            "leaseDurationSeconds": 300,
+            "renewTime": now.isoformat().replace("+00:00", "Z"),
+        }
+        if lease is None:
+            try:
+                self.request(
+                    "POST",
+                    resource_path("Lease", namespace),
+                    json={
+                        "apiVersion": "coordination.k8s.io/v1",
+                        "kind": "Lease",
+                        "metadata": {"name": name, "namespace": namespace},
+                        "spec": spec,
+                    },
+                )
+                self.lease_deadline = started + 270
+                return True
+            except KubeError as exc:
+                if exc.status == 409:
+                    return False
+                raise
+        previous = lease.get("spec", {})
+        renewed = datetime.fromisoformat(previous.get("renewTime", "1970-01-01T00:00:00Z"))
+        if (
+            previous.get("holderIdentity") != holder
+            and renewed + timedelta(seconds=previous.get("leaseDurationSeconds", 60)) > now
+        ):
+            return False
+        try:
+            self.patch(
+                "Lease",
+                namespace,
+                name,
+                {"metadata": {"resourceVersion": lease["metadata"]["resourceVersion"]}, "spec": spec},
+            )
+            self.lease_deadline = started + 270
+            return True
+        except KubeError as exc:
+            if exc.status == 409:
+                return False
+            raise

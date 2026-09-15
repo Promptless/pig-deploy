@@ -1,0 +1,13 @@
+name = "acme-pig"
+namespace = "pig"
+service_account_name = "pig-analyzer"
+trace_prefix = "acme/traces"
+# Supply TF_VAR_postgres_password through your approved secret workflow.
+# Review sizing, HA, deletion protection, and recovery defaults in variables.tf.
+region = "us-east-1"
+eks_cluster_name = "REPLACE_EXISTING_CLUSTER"
+oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/REPLACE_EKS_ISSUER"
+vpc_id = "REPLACE_VPC"
+database_subnet_ids = ["REPLACE_PRIVATE_SUBNET_A", "REPLACE_PRIVATE_SUBNET_B"]
+workload_security_group_id = "REPLACE_WORKLOAD_SG"
+trace_bucket_name = "REPLACE_UNIQUE_BUCKET"

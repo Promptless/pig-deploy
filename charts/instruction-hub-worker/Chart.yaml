@@ -1,0 +1,6 @@
+apiVersion: v2
+name: instruction-hub-worker
+description: Manual PIG analyzer deployment with native cloud object storage
+type: application
+version: 0.3.0
+appVersion: 0.3.0

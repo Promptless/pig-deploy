@@ -1,0 +1,12 @@
+watchNamespace: pig
+image:
+  repository: ghcr.io/promptless/pig-supervisor
+  # Publication inserts the verified immutable digest. Source renders require an explicit digest.
+  digest: ""
+releaseCatalogURL: https://raw.githubusercontent.com/Promptless/pig-deploy/main/catalog/stable.json
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi

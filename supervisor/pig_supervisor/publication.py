@@ -296,7 +296,9 @@ def promote_catalog(root: Path, manifest: Path, commit: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["evidence", "package", "chart-status", "assemble", "promote"])
+    parser.add_argument(
+        "operation", choices=["evidence", "package", "chart-status", "assemble", "promote", "promote-draft"]
+    )
     parser.add_argument("--version", required=True)
     parser.add_argument("--evidence", type=Path)
     parser.add_argument("--requirements", type=Path)
@@ -307,10 +309,15 @@ def main() -> None:
     parser.add_argument("--capabilities", type=Path)
     args = parser.parse_args()
     stable_version(args.version)
-    if args.operation == "promote":
+    if args.operation in {"promote", "promote-draft"}:
         if Release.model_validate_json(args.manifest.read_text()).version != args.version:
             raise ValueError("manifest version differs from the requested catalog promotion")
-        promote_catalog(args.root, args.manifest, args.manifest_commit)
+        if args.operation == "promote-draft":
+            from .promotion import promote_draft
+
+            print(promote_draft(args.root, args.manifest))
+        else:
+            promote_catalog(args.root, args.manifest, args.manifest_commit)
         return
     evidence = validate_evidence(json.loads(args.evidence.read_text()), args.version, datetime.now(UTC))
     if args.operation == "evidence":

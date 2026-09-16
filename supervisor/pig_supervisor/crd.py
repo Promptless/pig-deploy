@@ -34,3 +34,23 @@ def additive_crd(previous: dict, target: dict) -> bool:
         if left != right or not _schema_additive(old_schema, new_schema):
             return False
     return True
+
+
+def merge_crd(installed: dict, target: dict) -> dict | None:
+    """Union compatible optional properties without removing another namespace's fields."""
+    merged = deepcopy(installed)
+
+    def add_properties(current: dict, desired: dict) -> None:
+        for name, schema in desired.get("properties", {}).items():
+            properties = current.setdefault("properties", {})
+            if name not in properties:
+                properties[name] = deepcopy(schema)
+            else:
+                add_properties(properties[name], schema)
+
+    for current, desired in zip(merged.get("versions", []), target.get("versions", [])):
+        add_properties(current["schema"]["openAPIV3Schema"], desired["schema"]["openAPIV3Schema"])
+    # Both releases must retain every validation invariant, including required fields.
+    if not additive_crd(installed, merged) or not additive_crd(target, merged):
+        return None
+    return merged

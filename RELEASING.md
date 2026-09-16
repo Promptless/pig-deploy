@@ -89,7 +89,11 @@ or a new version, without overwriting already published bytes.
 
 The promotion uses two commits: immutable manifest first, then a stable-index
 entry pointing at that commit. Review the immutable URLs and evidence before
-merging. Merging makes the release eligible for automatic updates, including
+merging. If PR creation is interrupted after the branch push, rerun publication:
+it verifies the existing manifest bytes, digest, and reachable immutable commit,
+then creates or locates the PR without rewriting the branch. A mismatched branch
+or closed, unmerged PR requires operator review.
+Merging makes the release eligible for automatic updates, including
 major versions. Do not squash away or delete the manifest commit referenced by
 its URL. Keep releases, tags, and those commits reachable and protected.
 

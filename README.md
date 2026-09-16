@@ -1,3 +1,12 @@
+                ,-,------,
+              _ \(\(_,--'
+         <`--'\>/(/(__
+         /. .  `'` '  \
+        (`')  ,        @
+         `-._,        /
+            )-)_/--( >
+           ''''  ''''
+
 # PIG deployment
 
 Deploy Promptless Instruction Governance into an existing EKS, AKS, or GKE cluster.

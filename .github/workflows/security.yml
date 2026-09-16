@@ -1,0 +1,81 @@
+name: Security
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 8 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        with:
+          fail-on-severity: high
+  source-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Scan dependencies and secrets
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: fs
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Install Helm
+        uses: azure/setup-helm@bf6a7d304bc2fdb57e0331155b7ebf2c504acf0a # v4
+        with:
+          version: v3.18.6
+      - name: Prepare modules, Dockerfile and rendered charts for policy scanning
+        run: |
+          target="$RUNNER_TEMP/pig-config"
+          mkdir -p "$target"
+          cp -R modules "$target/modules"
+          cp supervisor/Dockerfile "$target/Dockerfile"
+          digest="sha256:$(printf 'a%.0s' {1..64})"
+          helm template pig-supervisor charts/pig-supervisor --namespace pig-system --include-crds \
+            --set-string "image.digest=$digest" > "$target/supervisor.yaml"
+          helm template pig-analyzer charts/instruction-hub-worker --namespace pig --include-crds \
+            --set-string "image.digest=$digest" \
+            --set-string instructionHub.runtimeBaseUrl=https://runtime.example.com \
+            --set-string instructionHub.deploymentInstanceId=ci \
+            --set-string instructionHub.configHash=ci \
+            --set-string instructionHub.traceObjectS3Bucket=ci-traces \
+            --set-string secrets.existingSecretName=pig-credentials > "$target/analyzer.yaml"
+      - name: Scan infrastructure configuration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: config
+          scan-ref: ${{ runner.temp }}/pig-config
+          trivyignores: .github/trivyignore.yaml
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+  image-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: docker build -f supervisor/Dockerfile -t pig-supervisor:security .
+      - name: Scan supervisor runtime image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          image-ref: pig-supervisor:security
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'

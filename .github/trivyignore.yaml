@@ -1,0 +1,14 @@
+misconfigurations:
+  - id: AZU-0010
+    paths: [modules/azure/main.tf]
+    statement: >-
+      Trace storage uses a private endpoint and workload identity. A blanket
+      trusted-Microsoft-services firewall bypass would broaden that boundary.
+      The Terraform contract test requires default Deny with bypass None.
+  - id: KSV-0056
+    paths: [supervisor.yaml]
+    statement: >-
+      The rendered supervisor Role must create and patch analyzer Services and
+      Ingresses in the watched namespace. Unit and real-cluster tests enforce
+      its resource and namespace limits. This exception applies only to the
+      supervisor render; networking permissions elsewhere remain findings.

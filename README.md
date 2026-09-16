@@ -52,6 +52,9 @@ contains an immutable image digest. Source charts require an explicit digest.
 
 ## Local validation
 
+See [CI checks](CI.md) for required pull-request checks, real Kubernetes
+integration tests, security scanning, and local reproduction.
+
 Use Python 3.11+, uv 0.8.22, Helm 3.18.6, Go from
 `tests/crd-validation/go.mod`, and Terraform 1.11.4. Provider versions and
 checksums are committed with each example and module.

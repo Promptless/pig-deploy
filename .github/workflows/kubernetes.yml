@@ -1,0 +1,65 @@
+name: Kubernetes integration
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: kubernetes-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  kubernetes:
+    name: kubernetes (${{ matrix.kubernetes }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The contract minimum, plus a current Kubernetes version. Image digests
+          # come from the corresponding kind release notes.
+          - kubernetes: v1.30.10
+            kind: v0.27.0
+            node: kindest/node:v1.30.10@sha256:4de75d0e82481ea846c0ed1de86328d821c1e6a6a91ac37bf804e5313670e507
+          - kubernetes: v1.37.0
+            kind: v0.33.0
+            node: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: '0.8.22'
+      - uses: azure/setup-helm@bf6a7d304bc2fdb57e0331155b7ebf2c504acf0a # v4
+        with:
+          version: v3.18.6
+      - uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1
+        with:
+          version: ${{ matrix.kind }}
+          node_image: ${{ matrix.node }}
+          kubectl_version: ${{ matrix.kubernetes }}
+          cluster_name: pig-ci
+          wait: 120s
+          registry: true
+          registry_name: pig-registry
+          registry_port: 5001
+      - name: Build exact checkout into the disposable cluster registry
+        run: |
+          docker build -f supervisor/Dockerfile -t pig-registry:5001/pig-supervisor:ci .
+          docker push pig-registry:5001/pig-supervisor:ci
+          image="$(docker inspect --format '{{index .RepoDigests 0}}' pig-registry:5001/pig-supervisor:ci)"
+          printf 'PIG_TEST_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
+      - run: uv sync --frozen
+      - name: Exercise real Helm, RBAC, admission, status, apply and leadership
+        run: uv run pytest tests/integration --run-kubernetes -v --junitxml=kubernetes-results.xml
+      - name: Collect cluster diagnostics
+        if: failure()
+        run: kind export logs --name pig-ci "$RUNNER_TEMP/kind-logs"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: kubernetes-${{ matrix.kubernetes }}
+          path: |
+            kubernetes-results.xml
+            ${{ runner.temp }}/kind-logs
+          retention-days: 7

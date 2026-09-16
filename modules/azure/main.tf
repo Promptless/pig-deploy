@@ -25,6 +25,10 @@ resource "azurerm_storage_account" "traces" {
   shared_access_key_enabled         = false
   default_to_oauth_authentication   = true
   infrastructure_encryption_enabled = true
+  network_rules {
+    default_action = "Deny"
+    bypass         = ["None"]
+  }
   blob_properties {
     versioning_enabled            = true
     change_feed_enabled           = true

@@ -22,15 +22,15 @@ jobs:
       VERSION: ${{ inputs.version }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Locate temporary release artifacts
         run: printf 'RELEASE_OUTPUT=%s\nEVIDENCE=%s\n' "$RUNNER_TEMP/pig-release" "$RUNNER_TEMP/pig-acceptance.json" >> "$GITHUB_ENV"
-      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: '0.8.22'
-      - uses: azure/setup-helm@bf6a7d304bc2fdb57e0331155b7ebf2c504acf0a # v4
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
         with:
           version: v3.18.6
       - name: Read reviewed evidence before selecting the accepted source

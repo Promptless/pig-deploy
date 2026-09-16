@@ -9,6 +9,6 @@
   "recoveryMaxAgeHours": null,
   "destructiveMigration": false,
   "schemaFrom": [0, 1],
-  "schemaTo": 1,
+  "schemaTo": 2,
   "controllerProtocol": 1
 }

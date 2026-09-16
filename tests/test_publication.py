@@ -62,16 +62,23 @@ def test_stale_worker_image_cannot_be_relabelled_as_native_release():
     _, requirements = evidence_data()
     with pytest.raises(ValueError, match="worker image"):
         check_capabilities({"storageBackends": ["s3"]}, requirements)
-    check_capabilities(
-        {
-            "controllerProtocol": 1,
-            "schemaRevision": 1,
-            "storageBackends": ["s3", "azureBlob", "gcs"],
-            "commands": ["preflight", "supervised-migrate", "verify", "acceptance"],
-            "capabilities": ["native-storage-v1", "migration-ledger-v1"],
-        },
-        requirements,
-    )
+
+
+@pytest.mark.parametrize("schema_revision", [1, 2])
+def test_candidate_requires_schema_2_worker(schema_revision):
+    _, requirements = evidence_data()
+    capabilities = {
+        "controllerProtocol": 1,
+        "schemaRevision": schema_revision,
+        "storageBackends": ["s3", "azureBlob", "gcs"],
+        "commands": ["preflight", "supervised-migrate", "verify", "acceptance"],
+        "capabilities": ["native-storage-v1", "migration-ledger-v1"],
+    }
+    if schema_revision == 1:
+        with pytest.raises(ValueError, match="worker image"):
+            check_capabilities(capabilities, requirements)
+    else:
+        check_capabilities(capabilities, requirements)
 
 
 def test_registry_checks_anonymous_access_and_content_digest():

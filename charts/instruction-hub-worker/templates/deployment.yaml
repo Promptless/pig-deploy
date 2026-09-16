@@ -1,0 +1,156 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "instruction-hub-worker.fullname" . }}
+  labels:
+    {{- include "instruction-hub-worker.labels" . | nindent 4 }}
+    {{- include "instruction-hub-worker.datadogLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: analyzer
+      app.kubernetes.io/name: {{ include "instruction-hub-worker.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        app.kubernetes.io/component: analyzer
+        app.kubernetes.io/name: {{ include "instruction-hub-worker.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- include "instruction-hub-worker.datadogLabels" . | nindent 8 }}
+      {{- if or .Values.observability.datadog.enabled .Values.podAnnotations }}
+      annotations:
+        {{- if .Values.observability.datadog.enabled }}
+        ad.datadoghq.com/worker.logs: {{ printf "[{\"source\":\"python\",\"service\":%q}]" .Values.observability.datadog.service | quote }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "instruction-hub-worker.serviceAccountName" . }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: {{ include "instruction-hub-worker.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.workerPort }}
+          env:
+            - name: INSTRUCTION_HUB_RUNTIME_BASE_URL
+              value: {{ required "instructionHub.runtimeBaseUrl is required" .Values.instructionHub.runtimeBaseUrl | quote }}
+            - name: INSTRUCTION_HUB_PORT
+              value: {{ .Values.service.workerPort | int | quote }}
+            - name: INSTRUCTION_HUB_DEPLOYMENT_NAME
+              value: {{ .Values.instructionHub.deploymentName | quote }}
+            - name: INSTRUCTION_HUB_DEPLOYMENT_INSTANCE_ID
+              value: {{ required "instructionHub.deploymentInstanceId is required" .Values.instructionHub.deploymentInstanceId | quote }}
+            - name: INSTRUCTION_HUB_CHART_VERSION
+              value: {{ .Chart.Version | quote }}
+            - name: INSTRUCTION_HUB_CONFIG_HASH
+              value: {{ required "instructionHub.configHash is required" .Values.instructionHub.configHash | quote }}
+            {{- include "instruction-hub-worker.storageEnv" . | nindent 12 }}
+            - name: INSTRUCTION_HUB_MAX_TRACE_BATCH_BYTES
+              value: {{ .Values.instructionHub.maxTraceBatchBytes | int | quote }}
+            - name: INSTRUCTION_HUB_LOG_LEVEL
+              value: {{ .Values.instructionHub.logLevel | default "INFO" | quote }}
+            {{- include "instruction-hub-worker.observabilityEnv" . | nindent 12 }}
+            - name: INSTRUCTION_HUB_ANALYSIS_QUIET_WINDOW_HOURS
+              value: {{ .Values.instructionHub.analysis.quietWindowHours | quote }}
+            {{- if or .Values.instructionHub.analysis.activationAt .Values.instructionHub.analysis.repository.url }}
+            {{- if .Values.instructionHub.analysis.activationAt }}
+            - name: INSTRUCTION_HUB_ANALYSIS_ACTIVATION_AT
+              value: {{ .Values.instructionHub.analysis.activationAt | quote }}
+            {{- end }}
+            - name: INSTRUCTION_HUB_ANALYSIS_MODEL_PROVIDER
+              value: {{ required "instructionHub.analysis.modelApi.provider is required when a Hub model or repository is configured" .Values.instructionHub.analysis.modelApi.provider | quote }}
+            - name: INSTRUCTION_HUB_ANALYSIS_MODEL_AUTHENTICATION
+              value: {{ required "instructionHub.analysis.modelApi.authentication is required when a Hub model or repository is configured" .Values.instructionHub.analysis.modelApi.authentication | quote }}
+            - name: INSTRUCTION_HUB_ANALYSIS_MODEL_BASE_URL
+              value: {{ required "instructionHub.analysis.modelApi.baseUrl is required when a Hub model or repository is configured" .Values.instructionHub.analysis.modelApi.baseUrl | quote }}
+            {{- if eq .Values.instructionHub.analysis.modelApi.authentication "api_key" }}
+            - name: INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "instruction-hub-worker.secretName" . }}
+                  key: {{ .Values.secrets.analysisModelApiKeyKey }}
+            {{- end }}
+            - name: INSTRUCTION_HUB_ANALYSIS_MODEL_NAME
+              value: {{ required "instructionHub.analysis.modelApi.model is required when a Hub model or repository is configured" .Values.instructionHub.analysis.modelApi.model | quote }}
+            - name: INSTRUCTION_HUB_ANALYSIS_REPOSITORY_URL
+              value: {{ required "instructionHub.analysis.repository.url is required when a Hub model or repository is configured" .Values.instructionHub.analysis.repository.url | quote }}
+            - name: INSTRUCTION_HUB_ANALYSIS_REPOSITORY_ID
+              value: {{ required "instructionHub.analysis.repository.id is required when a Hub model or repository is configured" .Values.instructionHub.analysis.repository.id | int | quote }}
+            - name: INSTRUCTION_HUB_ANALYSIS_REPOSITORY_FULL_NAME
+              value: {{ required "instructionHub.analysis.repository.fullName is required when a Hub model or repository is configured" .Values.instructionHub.analysis.repository.fullName | quote }}
+            - name: INSTRUCTION_HUB_ANALYSIS_MIRROR_ROOT
+              value: {{ .Values.instructionHub.analysis.repository.mirrorRoot | quote }}
+            {{- if .Values.instructionHub.analysis.repository.tokenSecretEnabled }}
+            - name: INSTRUCTION_HUB_ANALYSIS_REPOSITORY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "instruction-hub-worker.secretName" . }}
+                  key: {{ .Values.secrets.analysisRepositoryTokenKey }}
+            {{- end }}
+            {{- end }}
+            - name: INSTRUCTION_HUB_INSTALL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "instruction-hub-worker.secretName" . }}
+                  key: {{ .Values.secrets.installTokenKey }}
+            - name: INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "instruction-hub-worker.secretName" . }}
+                  key: {{ .Values.secrets.customerPostgresDsnKey }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "instruction-hub-worker.caMount" . | nindent 12 }}
+          {{- if or .Values.instructionHub.analysis.activationAt .Values.instructionHub.analysis.repository.url }}
+            - name: analysis-mirrors
+              mountPath: /var/lib/instruction-hub
+          {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- include "instruction-hub-worker.caVolume" . | nindent 8 }}
+      {{- if or .Values.instructionHub.analysis.activationAt .Values.instructionHub.analysis.repository.url }}
+        - name: analysis-mirrors
+          emptyDir: {}
+      {{- end }}

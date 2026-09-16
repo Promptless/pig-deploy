@@ -1,0 +1,453 @@
+{
+  "$defs": {
+    "Analysis": {
+      "additionalProperties": false,
+      "properties": {
+        "activationAt": {
+          "default": "",
+          "title": "Activationat",
+          "type": "string"
+        },
+        "quietWindowHours": {
+          "default": 0.5,
+          "exclusiveMinimum": 0,
+          "title": "Quietwindowhours",
+          "type": "number"
+        },
+        "repository": {
+          "$ref": "#/$defs/Repository"
+        },
+        "model": {
+          "$ref": "#/$defs/Model"
+        }
+      },
+      "required": [
+        "repository",
+        "model"
+      ],
+      "title": "Analysis",
+      "type": "object"
+    },
+    "AzureBlob": {
+      "additionalProperties": false,
+      "properties": {
+        "accountURL": {
+          "pattern": "^https://[a-z0-9]+\\.blob\\.core\\.windows\\.net/?$",
+          "title": "Accounturl",
+          "type": "string"
+        },
+        "container": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "title": "Container",
+          "type": "string"
+        },
+        "prefix": {
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9/_.-]+$",
+          "title": "Prefix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "accountURL",
+        "container",
+        "prefix"
+      ],
+      "title": "AzureBlob",
+      "type": "object"
+    },
+    "Confirmation": {
+      "additionalProperties": false,
+      "properties": {
+        "configMapRef": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "title": "Configmapref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "configMapRef"
+      ],
+      "title": "Confirmation",
+      "type": "object"
+    },
+    "Endpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "hostname": {
+          "pattern": "^[a-zA-Z0-9.-]+$",
+          "title": "Hostname",
+          "type": "string"
+        },
+        "ingressClassName": {
+          "title": "Ingressclassname",
+          "type": "string"
+        },
+        "tlsSecretName": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "title": "Tlssecretname",
+          "type": "string"
+        },
+        "ingressAnnotations": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Ingressannotations",
+          "type": "object"
+        }
+      },
+      "required": [
+        "hostname",
+        "ingressClassName",
+        "tlsSecretName"
+      ],
+      "title": "Endpoint",
+      "type": "object"
+    },
+    "GCS": {
+      "additionalProperties": false,
+      "properties": {
+        "bucket": {
+          "minLength": 3,
+          "pattern": "^[a-z0-9._-]+$",
+          "title": "Bucket",
+          "type": "string"
+        },
+        "prefix": {
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9/_.-]+$",
+          "title": "Prefix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bucket",
+        "prefix"
+      ],
+      "title": "GCS",
+      "type": "object"
+    },
+    "Hosted": {
+      "additionalProperties": false,
+      "properties": {
+        "runtimeURL": {
+          "title": "Runtimeurl",
+          "type": "string"
+        },
+        "deploymentID": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "installTokenSecretRef": {
+          "$ref": "#/$defs/SecretRef"
+        }
+      },
+      "required": [
+        "runtimeURL",
+        "deploymentID",
+        "installTokenSecretRef"
+      ],
+      "title": "Hosted",
+      "type": "object"
+    },
+    "Model": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "enum": [
+            "openai",
+            "azure_openai",
+            "aws_bedrock"
+          ],
+          "title": "Provider",
+          "type": "string"
+        },
+        "authentication": {
+          "enum": [
+            "api_key",
+            "aws_sigv4"
+          ],
+          "title": "Authentication",
+          "type": "string"
+        },
+        "baseURL": {
+          "title": "Baseurl",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "apiKeySecretRef": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "provider",
+        "authentication",
+        "baseURL",
+        "name"
+      ],
+      "title": "Model",
+      "type": "object"
+    },
+    "Postgres": {
+      "additionalProperties": false,
+      "properties": {
+        "dsnSecretRef": {
+          "$ref": "#/$defs/SecretRef"
+        },
+        "caConfigMapRef": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "dsnSecretRef"
+      ],
+      "title": "Postgres",
+      "type": "object"
+    },
+    "ReleasePolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "const": "stable",
+          "default": "stable",
+          "title": "Channel",
+          "type": "string"
+        },
+        "paused": {
+          "default": false,
+          "title": "Paused",
+          "type": "boolean"
+        },
+        "pinnedVersion": {
+          "default": "",
+          "title": "Pinnedversion",
+          "type": "string"
+        },
+        "confirmation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Confirmation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "ReleasePolicy",
+      "type": "object"
+    },
+    "Repository": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "pattern": "^https://github\\.com/[^/]+/[^/]+\\.git$",
+          "title": "Url",
+          "type": "string"
+        },
+        "id": {
+          "exclusiveMinimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "fullName": {
+          "pattern": "^[^/]+/[^/]+$",
+          "title": "Fullname",
+          "type": "string"
+        },
+        "tokenSecretRef": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "url",
+        "id",
+        "fullName"
+      ],
+      "title": "Repository",
+      "type": "object"
+    },
+    "S3": {
+      "additionalProperties": false,
+      "properties": {
+        "region": {
+          "title": "Region",
+          "type": "string"
+        },
+        "bucket": {
+          "minLength": 3,
+          "pattern": "^[a-z0-9.-]+$",
+          "title": "Bucket",
+          "type": "string"
+        },
+        "prefix": {
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9/_.-]+$",
+          "title": "Prefix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "region",
+        "bucket",
+        "prefix"
+      ],
+      "title": "S3",
+      "type": "object"
+    },
+    "SecretRef": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "title": "Name",
+          "type": "string"
+        },
+        "key": {
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9._-]+$",
+          "title": "Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "key"
+      ],
+      "title": "SecretRef",
+      "type": "object"
+    },
+    "Storage": {
+      "additionalProperties": false,
+      "properties": {
+        "postgres": {
+          "$ref": "#/$defs/Postgres"
+        },
+        "s3": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/S3"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "azureBlob": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AzureBlob"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gcs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GCS"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "postgres"
+      ],
+      "title": "Storage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "release": {
+      "$ref": "#/$defs/ReleasePolicy"
+    },
+    "serviceAccountName": {
+      "maxLength": 63,
+      "minLength": 1,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+      "title": "Serviceaccountname",
+      "type": "string"
+    },
+    "podLabels": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Podlabels",
+      "type": "object"
+    },
+    "nodeSelector": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Nodeselector",
+      "type": "object"
+    },
+    "hosted": {
+      "$ref": "#/$defs/Hosted"
+    },
+    "endpoint": {
+      "$ref": "#/$defs/Endpoint"
+    },
+    "storage": {
+      "$ref": "#/$defs/Storage"
+    },
+    "analysis": {
+      "$ref": "#/$defs/Analysis"
+    }
+  },
+  "required": [
+    "serviceAccountName",
+    "hosted",
+    "endpoint",
+    "storage",
+    "analysis"
+  ],
+  "title": "DeploymentSpec",
+  "type": "object"
+}

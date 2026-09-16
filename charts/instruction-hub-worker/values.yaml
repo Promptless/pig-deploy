@@ -1,0 +1,98 @@
+# Publication sets image.digest to the verified worker artifact.
+replicaCount: 1
+image:
+  repository: ghcr.io/promptless/instruction-hub-worker
+  pullPolicy: IfNotPresent
+  digest: ''
+service:
+  type: ClusterIP
+  workerPort: 8080
+observability:
+  environment: local
+  datadog:
+    enabled: false
+    env: local
+    service: instruction-hub-worker
+    agentUrl: http://datadog-agent.datadog:8126
+    site: datadoghq.com
+  sentry:
+    enabled: false
+    existingSecretName: ''
+    dsnKey: SENTRY_DSN
+serviceAccount:
+  # Deliver this account before installation when migrationJob.enabled is true.
+  create: false
+  name: pig-analyzer
+  annotations: {}
+gateway:
+  enabled: false
+  className: ''
+  annotations: {}
+  hosts:
+  - host: instruction-hub-worker.example.com
+  paths:
+  - path: /healthz
+    pathType: Exact
+    servicePortName: http
+  - path: /v0/host-enrollment/policy
+    pathType: Exact
+    servicePortName: http
+  - path: /v0/host-enrollment/check-ins
+    pathType: Exact
+    servicePortName: http
+  - path: /v0/traces/batches
+    pathType: Exact
+    servicePortName: http
+  tls: []
+instructionHub:
+  runtimeBaseUrl: ''
+  deploymentName: instruction-hub-worker
+  deploymentInstanceId: ''
+  configHash: ''
+  storageBackend: postgres_s3
+  traceObjectS3Bucket: ''
+  traceObjectS3Prefix: trace-objects
+  maxTraceBatchBytes: 268435456
+  logLevel: INFO
+  analysis:
+    quietWindowHours: 0.5
+    activationAt: ''
+    modelApi:
+      provider: openai
+      authentication: api_key
+      baseUrl: https://api.openai.com/v1
+      model: gpt-5.6-sol
+    repository:
+      url: ''
+      id: 0
+      fullName: ''
+      tokenSecretEnabled: false
+      mirrorRoot: /var/lib/instruction-hub/analysis-mirrors
+  traceObjectAzureAccountUrl: ''
+  traceObjectAzureContainer: ''
+  traceObjectGcsBucket: ''
+  traceObjectPrefix: trace-objects
+  postgresCaConfigMapName: ''
+  postgresCaConfigMapKey: ca.pem
+secrets:
+  existingSecretName: ''
+  installTokenKey: install-token
+  customerPostgresDsnKey: customer-postgres-dsn
+  analysisModelApiKeyKey: analysis-model-api-key
+  analysisRepositoryTokenKey: analysis-repository-token
+  create: false
+  installToken: ''
+  customerPostgresDsn: ''
+  analysisModelApiKey: ''
+  analysisRepositoryToken: ''
+migrationJob:
+  enabled: true
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    memory: 2Gi
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}

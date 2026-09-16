@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/schema#",
+  "type": "object",
+  "properties": {
+    "serviceAccount": {
+      "type": "object",
+      "required": ["create", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "create": {"type": "boolean"},
+        "name": {"type": "string"},
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        }
+      }
+    },
+    "migrationJob": {
+      "type": "object",
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"}
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "observability": {
+      "type": "object",
+      "required": [
+        "environment",
+        "datadog",
+        "sentry"
+      ],
+      "properties": {
+        "environment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "datadog": {
+          "type": "object",
+          "required": [
+            "enabled",
+            "env",
+            "service",
+            "agentUrl",
+            "site"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "env": {
+              "type": "string",
+              "minLength": 1
+            },
+            "service": {
+              "type": "string",
+              "minLength": 1
+            },
+            "agentUrl": {
+              "type": "string",
+              "pattern": "^https?://"
+            },
+            "site": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "sentry": {
+          "type": "object",
+          "required": [
+            "enabled",
+            "existingSecretName",
+            "dsnKey"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "existingSecretName": {
+              "type": "string"
+            },
+            "dsnKey": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "existingSecretName": {
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "instructionHub": {
+      "type": "object",
+      "properties": {
+        "logLevel": {
+          "type": "string",
+          "enum": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "CRITICAL"
+          ]
+        },
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "quietWindowHours": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "activationAt": {
+              "type": "string"
+            },
+            "modelApi": {
+              "type": "object",
+              "required": [
+                "provider",
+                "authentication",
+                "baseUrl",
+                "model"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "openai",
+                    "azure_openai",
+                    "aws_bedrock"
+                  ]
+                },
+                "authentication": {
+                  "type": "string",
+                  "enum": [
+                    "api_key",
+                    "aws_sigv4"
+                  ]
+                },
+                "baseUrl": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "model": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "provider": {
+                        "const": "openai"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "baseUrl": {
+                        "pattern": "^https://api\\.openai\\.com/v1/?$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "provider": {
+                        "const": "azure_openai"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "baseUrl": {
+                        "pattern": "^https://[a-z0-9][a-z0-9.-]*\\.(openai\\.azure\\.com|services\\.ai\\.azure\\.com)/openai/v1/?$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "provider": {
+                        "const": "aws_bedrock"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "baseUrl": {
+                        "pattern": "^https://bedrock-mantle\\.[a-z0-9-]+\\.api\\.aws/(openai/)?v1/?$"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "authentication": {
+                        "const": "aws_sigv4"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "provider": {
+                        "const": "aws_bedrock"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "provider": {
+                        "enum": [
+                          "openai",
+                          "azure_openai"
+                        ]
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "authentication": {
+                        "const": "api_key"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "repository": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "fullName": {
+                  "type": "string"
+                },
+                "tokenSecretEnabled": {
+                  "type": "boolean"
+                },
+                "mirrorRoot": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "storageBackend": {
+          "type": "string",
+          "enum": [
+            "postgres_s3",
+            "postgres_azure_blob",
+            "postgres_gcs"
+          ]
+        },
+        "postgresCaConfigMapName": {
+          "type": "string"
+        },
+        "postgresCaConfigMapKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "traceObjectAzureAccountUrl": {
+          "type": "string"
+        },
+        "traceObjectAzureContainer": {
+          "type": "string"
+        },
+        "traceObjectGcsBucket": {
+          "type": "string"
+        },
+        "traceObjectPrefix": {
+          "type": "string"
+        },
+        "traceObjectS3Bucket": {
+          "type": "string"
+        },
+        "traceObjectS3Prefix": {
+          "type": "string"
+        }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "analysisModelApiKeyKey": {
+          "type": "string"
+        },
+        "analysisModelApiKey": {
+          "type": "string"
+        },
+        "analysisRepositoryTokenKey": {
+          "type": "string"
+        },
+        "analysisRepositoryToken": {
+          "type": "string"
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": [
+        "repository",
+        "digest"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/promptless/instruction-hub-worker$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^(sha256:[a-f0-9]{64})?$"
+        }
+      }
+    },
+    "replicaCount": {
+      "type": "integer",
+      "const": 1
+    },
+    "podLabels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "not": {
+          "enum": [
+            "app.kubernetes.io/component",
+            "app.kubernetes.io/name",
+            "app.kubernetes.io/instance"
+          ]
+        }
+      }
+    }
+  }
+}

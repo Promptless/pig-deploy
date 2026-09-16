@@ -10,3 +10,5 @@ __pycache__/
 *.tgz
 dist/
 .env*
+
+.release/

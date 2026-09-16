@@ -1,0 +1,12 @@
+name = "acme-pig"
+namespace = "pig"
+service_account_name = "pig-analyzer"
+trace_prefix = "acme/traces"
+# Supply TF_VAR_postgres_password through your approved secret workflow.
+# Review sizing, HA, deletion protection, and recovery defaults in variables.tf.
+project_id = "REPLACE_PROJECT"
+region = "us-central1"
+workload_identity_pool = "REPLACE_PROJECT.svc.id.goog"
+network_id = "projects/REPLACE_PROJECT/global/networks/REPLACE_VPC"
+allocated_ip_range = "REPLACE_EXISTING_PSA_RANGE"
+trace_bucket_name = "REPLACE_UNIQUE_BUCKET"

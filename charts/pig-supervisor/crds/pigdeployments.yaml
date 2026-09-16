@@ -1,0 +1,316 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: pigdeployments.governance.promptless.ai
+spec:
+  group: governance.promptless.ai
+  scope: Namespaced
+  names:
+    plural: pigdeployments
+    singular: pigdeployment
+    kind: PIGDeployment
+    shortNames:
+    - pig
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              release:
+                properties:
+                  channel:
+                    type: string
+                    enum:
+                    - stable
+                  paused:
+                    type: boolean
+                  pinnedVersion:
+                    type: string
+                  confirmation:
+                    properties:
+                      configMapRef:
+                        maxLength: 63
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                        type: string
+                    required:
+                    - configMapRef
+                    type: object
+                    nullable: true
+                type: object
+              serviceAccountName:
+                maxLength: 63
+                minLength: 1
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+              podLabels:
+                additionalProperties:
+                  type: string
+                type: object
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                type: object
+              hosted:
+                properties:
+                  runtimeURL:
+                    type: string
+                  deploymentID:
+                    maxLength: 200
+                    minLength: 1
+                    type: string
+                  installTokenSecretRef:
+                    properties:
+                      name:
+                        maxLength: 63
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                        type: string
+                      key:
+                        minLength: 1
+                        pattern: ^[a-zA-Z0-9._-]+$
+                        type: string
+                    required:
+                    - name
+                    - key
+                    type: object
+                required:
+                - runtimeURL
+                - deploymentID
+                - installTokenSecretRef
+                type: object
+              endpoint:
+                properties:
+                  hostname:
+                    pattern: ^[a-zA-Z0-9.-]+$
+                    type: string
+                  ingressClassName:
+                    type: string
+                  tlsSecretName:
+                    maxLength: 63
+                    minLength: 1
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                    type: string
+                  ingressAnnotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                required:
+                - hostname
+                - ingressClassName
+                - tlsSecretName
+                type: object
+              storage:
+                properties:
+                  postgres:
+                    properties:
+                      dsnSecretRef:
+                        properties:
+                          name:
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                          key:
+                            minLength: 1
+                            pattern: ^[a-zA-Z0-9._-]+$
+                            type: string
+                        required:
+                        - name
+                        - key
+                        type: object
+                      caConfigMapRef:
+                        properties:
+                          name:
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                          key:
+                            minLength: 1
+                            pattern: ^[a-zA-Z0-9._-]+$
+                            type: string
+                        required:
+                        - name
+                        - key
+                        type: object
+                        nullable: true
+                    required:
+                    - dsnSecretRef
+                    type: object
+                  s3:
+                    properties:
+                      region:
+                        type: string
+                      bucket:
+                        minLength: 3
+                        pattern: ^[a-z0-9.-]+$
+                        type: string
+                      prefix:
+                        minLength: 1
+                        pattern: ^[a-zA-Z0-9/_.-]+$
+                        type: string
+                    required:
+                    - region
+                    - bucket
+                    - prefix
+                    type: object
+                    nullable: true
+                  azureBlob:
+                    properties:
+                      accountURL:
+                        pattern: ^https://[a-z0-9]+\.blob\.core\.windows\.net/?$
+                        type: string
+                      container:
+                        maxLength: 63
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                        type: string
+                      prefix:
+                        minLength: 1
+                        pattern: ^[a-zA-Z0-9/_.-]+$
+                        type: string
+                    required:
+                    - accountURL
+                    - container
+                    - prefix
+                    type: object
+                    nullable: true
+                  gcs:
+                    properties:
+                      bucket:
+                        minLength: 3
+                        pattern: ^[a-z0-9._-]+$
+                        type: string
+                      prefix:
+                        minLength: 1
+                        pattern: ^[a-zA-Z0-9/_.-]+$
+                        type: string
+                    required:
+                    - bucket
+                    - prefix
+                    type: object
+                    nullable: true
+                required:
+                - postgres
+                type: object
+                x-kubernetes-validations:
+                - rule: '(has(self.s3) ? 1 : 0) + (has(self.azureBlob) ? 1 : 0) +
+                    (has(self.gcs) ? 1 : 0) == 1'
+                  message: exactly one native object backend is required
+              analysis:
+                properties:
+                  activationAt:
+                    type: string
+                  quietWindowHours:
+                    exclusiveMinimum: true
+                    type: number
+                    minimum: 0
+                  repository:
+                    properties:
+                      url:
+                        pattern: ^https://github\.com/[^/]+/[^/]+\.git$
+                        type: string
+                      id:
+                        exclusiveMinimum: true
+                        type: integer
+                        minimum: 0
+                      fullName:
+                        pattern: ^[^/]+/[^/]+$
+                        type: string
+                      tokenSecretRef:
+                        properties:
+                          name:
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                          key:
+                            minLength: 1
+                            pattern: ^[a-zA-Z0-9._-]+$
+                            type: string
+                        required:
+                        - name
+                        - key
+                        type: object
+                        nullable: true
+                    required:
+                    - url
+                    - id
+                    - fullName
+                    type: object
+                  model:
+                    properties:
+                      provider:
+                        enum:
+                        - openai
+                        - azure_openai
+                        - aws_bedrock
+                        type: string
+                      authentication:
+                        enum:
+                        - api_key
+                        - aws_sigv4
+                        type: string
+                      baseURL:
+                        type: string
+                      name:
+                        type: string
+                      apiKeySecretRef:
+                        properties:
+                          name:
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                          key:
+                            minLength: 1
+                            pattern: ^[a-zA-Z0-9._-]+$
+                            type: string
+                        required:
+                        - name
+                        - key
+                        type: object
+                        nullable: true
+                    required:
+                    - provider
+                    - authentication
+                    - baseURL
+                    - name
+                    type: object
+                required:
+                - repository
+                - model
+                type: object
+            required:
+            - serviceAccountName
+            - hosted
+            - endpoint
+            - storage
+            - analysis
+            type: object
+          status:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+        required:
+        - spec
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Version
+      type: string
+      jsonPath: .status.currentVersion
+    - name: Phase
+      type: string
+      jsonPath: .status.phase

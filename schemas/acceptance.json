@@ -1,0 +1,83 @@
+{
+  "$defs": {
+    "CloudAcceptance": {
+      "additionalProperties": false,
+      "properties": {
+        "testedAt": {
+          "format": "date-time",
+          "title": "Testedat",
+          "type": "string"
+        },
+        "evidence": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Evidence",
+          "type": "object"
+        }
+      },
+      "required": [
+        "testedAt",
+        "evidence"
+      ],
+      "title": "CloudAcceptance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "title": "Version",
+      "type": "string"
+    },
+    "sourceCommit": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Sourcecommit",
+      "type": "string"
+    },
+    "analyzerImage": {
+      "pattern": "^ghcr\\.io/promptless/[a-z0-9-]+@sha256:[a-f0-9]{64}$",
+      "title": "Analyzerimage",
+      "type": "string"
+    },
+    "supervisorImage": {
+      "pattern": "^ghcr\\.io/promptless/[a-z0-9-]+@sha256:[a-f0-9]{64}$",
+      "title": "Supervisorimage",
+      "type": "string"
+    },
+    "requirementsDigest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Requirementsdigest",
+      "type": "string"
+    },
+    "rollbackTo": {
+      "items": {
+        "pattern": "^[a-f0-9]{64}$",
+        "type": "string"
+      },
+      "title": "Rollbackto",
+      "type": "array"
+    },
+    "eks": {
+      "$ref": "#/$defs/CloudAcceptance"
+    },
+    "aks": {
+      "$ref": "#/$defs/CloudAcceptance"
+    },
+    "gke": {
+      "$ref": "#/$defs/CloudAcceptance"
+    }
+  },
+  "required": [
+    "version",
+    "sourceCommit",
+    "analyzerImage",
+    "supervisorImage",
+    "requirementsDigest",
+    "eks",
+    "aks",
+    "gke"
+  ],
+  "title": "AcceptanceEvidence",
+  "type": "object"
+}

@@ -1,0 +1,248 @@
+{
+  "$defs": {
+    "Artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "pattern": "^https://raw\\.githubusercontent\\.com/Promptless/pig-deploy/[a-f0-9]{40}/[a-zA-Z0-9/_.-]+$",
+          "title": "Url",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "sha256"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
+    "ChartArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "pattern": "^oci://ghcr\\.io/promptless/charts/(pig-supervisor|instruction-hub-worker)$",
+          "title": "Repository",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "ociDigest": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Ocidigest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "version",
+        "sha256",
+        "ociDigest"
+      ],
+      "title": "ChartArtifact",
+      "type": "object"
+    },
+    "ReleaseArtifacts": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceCommit": {
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Sourcecommit",
+          "type": "string"
+        },
+        "terraformArchiveURL": {
+          "pattern": "^https://github\\.com/Promptless/pig-deploy/releases/download/v[0-9.]+/pig-deploy-[0-9.]+\\.tar\\.gz$",
+          "title": "Terraformarchiveurl",
+          "type": "string"
+        },
+        "terraformArchiveSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Terraformarchivesha256",
+          "type": "string"
+        },
+        "supervisorChart": {
+          "$ref": "#/$defs/ChartArtifact"
+        },
+        "workerChart": {
+          "$ref": "#/$defs/ChartArtifact"
+        }
+      },
+      "required": [
+        "sourceCommit",
+        "terraformArchiveURL",
+        "terraformArchiveSha256",
+        "supervisorChart",
+        "workerChart"
+      ],
+      "title": "ReleaseArtifacts",
+      "type": "object"
+    },
+    "Requirements": {
+      "additionalProperties": false,
+      "properties": {
+        "kubernetesMin": {
+          "default": "1.30.0",
+          "title": "Kubernetesmin",
+          "type": "string"
+        },
+        "postgresMin": {
+          "default": 15,
+          "minimum": 15,
+          "title": "Postgresmin",
+          "type": "integer"
+        },
+        "postgresMax": {
+          "default": 18,
+          "minimum": 15,
+          "title": "Postgresmax",
+          "type": "integer"
+        },
+        "operatorCapacityRequirements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Operatorcapacityrequirements",
+          "type": "array"
+        },
+        "capacityConfirmationMaxAgeHours": {
+          "default": 24,
+          "exclusiveMinimum": 0,
+          "title": "Capacityconfirmationmaxagehours",
+          "type": "integer"
+        },
+        "storageBackends": {
+          "items": {
+            "enum": [
+              "s3",
+              "azureBlob",
+              "gcs"
+            ],
+            "type": "string"
+          },
+          "title": "Storagebackends",
+          "type": "array"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "recoveryMaxAgeHours": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recoverymaxagehours"
+        },
+        "destructiveMigration": {
+          "default": false,
+          "title": "Destructivemigration",
+          "type": "boolean"
+        },
+        "schemaFrom": {
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "title": "Schemafrom",
+          "type": "array"
+        },
+        "schemaTo": {
+          "minimum": 1,
+          "title": "Schemato",
+          "type": "integer"
+        },
+        "controllerProtocol": {
+          "const": 1,
+          "default": 1,
+          "title": "Controllerprotocol",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "storageBackends",
+        "schemaFrom",
+        "schemaTo"
+      ],
+      "title": "Requirements",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "title": "Version",
+      "type": "string"
+    },
+    "analyzerImage": {
+      "pattern": "^ghcr\\.io/promptless/[a-z0-9-]+@sha256:[a-f0-9]{64}$",
+      "title": "Analyzerimage",
+      "type": "string"
+    },
+    "supervisorImage": {
+      "pattern": "^ghcr\\.io/promptless/[a-z0-9-]+@sha256:[a-f0-9]{64}$",
+      "title": "Supervisorimage",
+      "type": "string"
+    },
+    "requirements": {
+      "$ref": "#/$defs/Requirements"
+    },
+    "rollbackTo": {
+      "items": {
+        "pattern": "^[a-f0-9]{64}$",
+        "type": "string"
+      },
+      "title": "Rollbackto",
+      "type": "array"
+    },
+    "crd": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Artifact"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "artifacts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReleaseArtifacts"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "version",
+    "analyzerImage",
+    "supervisorImage",
+    "requirements"
+  ],
+  "title": "Release",
+  "type": "object"
+}

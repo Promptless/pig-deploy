@@ -272,6 +272,86 @@ def test_competing_policy_and_flux_ownership_block_before_any_workload():
         assert reason(document) == "FluxHandoffRequired" and not kube.applied
 
 
+@pytest.mark.parametrize(
+    "name,spec,system_namespace,supervisor_name,matching",
+    [
+        ("bootstrap", {"targetNamespace": "pig-system"}, "pig-system", "pig-system-bootstrap", True),
+        ("bootstrap", {}, "pig-system", "bootstrap", True),
+        ("bootstrap", {"releaseName": "custom", "targetNamespace": "pig-system"}, "pig-system", "custom", True),
+        (
+            "with-a-nice-object-name",
+            {"targetNamespace": "a-very-lengthy-target-namespace"},
+            "a-very-lengthy-target-namespace",
+            "a-very-lengthy-target-namespace-with-a-n-97af5d7f41f3",
+            True,
+        ),
+        ("bootstrap", {"releaseName": "custom", "targetNamespace": "other"}, "pig-system", "custom", False),
+        ("unrelated", {}, "pig-system", "pig-supervisor", False),
+    ],
+)
+@pytest.mark.parametrize("suspended", [False, True])
+def test_flux_handoff_matches_installed_release_identity(
+    name, spec, system_namespace, supervisor_name, matching, suspended
+):
+    kube, document = FakeKube(), deployment()
+    kube.flux = [{"metadata": {"name": name, "namespace": system_namespace}, "spec": spec | {"suspend": suspended}}]
+    with client_for(manifest()) as client:
+        controller = Controller(kube, client, CATALOG, "pig", system_namespace, supervisor_name)
+        for _ in range(2):
+            controller.reconcile(document, 1, NOW)
+        if matching and not suspended:
+            assert reason(document) == "FluxHandoffRequired" and not kube.applied
+        else:
+            assert reason(document) == "ChecksPassed"
+            assert [resource["kind"] for resource in kube.applied] == ["Job"]
+
+
+@pytest.mark.parametrize("change", ["Secret", "ServiceAccount", "ConfigMap", "release"])
+def test_acceptance_is_invalidated_through_transition_and_renewed_only_with_matching_evidence(change):
+    kube, document = FakeKube(), deployment()
+    with client_for(manifest()) as client:
+        reconcile_to_ready(kube, document, client)
+        controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
+        controller.reconcile(document, 1, NOW)
+        kube.finish_jobs()
+        controller.reconcile(document, 1, NOW)
+    previous = deepcopy(document["status"])
+    assert next(c for c in previous["conditions"] if c["type"] == "Acceptance")["status"] == "True"
+    if change != "release":
+        name = {"Secret": "pig-credentials", "ServiceAccount": "pig-analyzer", "ConfigMap": "postgres-ca"}[change]
+        kube.get(change, "pig", name)["metadata"]["resourceVersion"] = "2"
+    releases = [manifest(), manifest("2.0.0")] if change == "release" else [manifest()]
+    with client_for(*releases) as client:
+        for _ in range(24):
+            controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
+            controller.reconcile(document, 1, NOW)
+            status = document["status"]
+            assert next(c for c in status["conditions"] if c["type"] == "Acceptance")["status"] == "False"
+            for key in ("acceptedConfigurationHash", "acceptedReleaseDigest", "acceptedJob", "lastAcceptanceAt"):
+                assert status[key] == previous[key]
+            if status["phase"] == "complete" and not status.get("targetDigest"):
+                break
+            kube.finish_jobs()
+        else:
+            pytest.fail("transition never completed")
+        assert next(c for c in status["conditions"] if c["type"] == "Ready")["status"] == "True"
+        assert (status["configurationHash"], status["currentDigest"]) != (
+            previous["configurationHash"],
+            previous["currentDigest"],
+        )
+        # The next steady reconcile starts a new acceptance Job; it is not evidence yet.
+        controller.reconcile(document, 1, NOW)
+        assert next(c for c in document["status"]["conditions"] if c["type"] == "Acceptance")["status"] == "False"
+        kube.finish_jobs()
+        controller.reconcile(document, 1, NOW)
+        status = document["status"]
+        assert next(c for c in status["conditions"] if c["type"] == "Acceptance")["status"] == "True"
+        assert status["acceptedConfigurationHash"] == status["configurationHash"]
+        assert status["acceptedReleaseDigest"] == status["currentDigest"]
+        assert status["acceptedJob"] != previous["acceptedJob"]
+    assert document["metadata"]["generation"] == 1
+
+
 def test_secret_rotation_revalidates_and_never_overwrites_secret_or_serviceaccount():
     kube, document = FakeKube(), deployment()
     with client_for(manifest()) as client:

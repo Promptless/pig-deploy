@@ -13,6 +13,11 @@ the CRD, so automatic CRD changes must be optional, additive, and within the
 named CRD permissions granted at bootstrap. New capabilities block the release
 until an operator reviews and applies a bootstrap upgrade.
 
+A contender waits one full Lease duration (five minutes) after first observing
+an existing Lease or observing its latest renewal before taking over. A newly
+started contender begins that wait afresh; another node's wall clock is not
+evidence of Lease expiry.
+
 Name the `PIGDeployment` with at most 54 lowercase letters, digits, or hyphens.
 Start with a letter and end with a letter or digit so its generated Service name
 meets Kubernetes naming rules.

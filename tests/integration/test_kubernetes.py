@@ -178,7 +178,7 @@ def test_chart_install_upgrade_and_process_handoff(deployment):
     old_holder = read("lease", NAME)["spec"]["holderIdentity"]
     old_uid = deployment["metadata"]["uid"]
     helm("--set", "resources.requests.cpu=110m")
-    # Simulate expiry to avoid waiting the production five-minute Lease duration.
+    # The previous Pod has terminated. Shorten the observation wait for this test.
     kubectl(
         "patch",
         "lease",
@@ -187,7 +187,7 @@ def test_chart_install_upgrade_and_process_handoff(deployment):
         NAMESPACE,
         "--type=merge",
         "-p",
-        json.dumps({"spec": {"renewTime": "2000-01-01T00:00:00.000000Z"}}),
+        json.dumps({"spec": {"leaseDurationSeconds": 1}}),
     )
     wait_for(
         "the replacement process to acquire leadership",
@@ -276,13 +276,19 @@ def test_server_side_apply_preserves_field_and_resource_ownership(api, deploymen
     assert api.get("Service", NAMESPACE, "apply-test")["spec"]["selector"]["app"] == "second"
 
 
-def test_real_rbac_and_lease_contenders(api):
+def test_real_rbac_and_lease_contenders(api, monkeypatch):
+    elapsed = time.monotonic()
+    monkeypatch.setattr("pig_supervisor.kube.monotonic", lambda: elapsed)
     now = datetime.now(UTC)
     contender = Kube(api.client)
     assert not contender.leadership(NAMESPACE, "second-holder", now)
     with pytest.raises(KubeError, match="Lease expired"):
         contender.patch("Service", NAMESPACE, "anything", {"spec": {"selector": {"app": "unauthorized"}}})
+    assert not contender.leadership(NAMESPACE, "second-holder", now + timedelta(days=1))
+    elapsed += 301
     assert contender.leadership(NAMESPACE, "second-holder", now + timedelta(seconds=301))
+    with pytest.raises(KubeError, match="Lease expired"):
+        api.patch("Service", NAMESPACE, "anything", {"spec": {"selector": {"app": "expired"}}})
     assert not api.leadership(NAMESPACE, "test-holder", now + timedelta(seconds=302))
 
     forbidden = [

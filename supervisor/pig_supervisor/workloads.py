@@ -97,6 +97,7 @@ def pod_template(spec: DeploymentSpec, release: Release, config_hash: str, deplo
         "metadata": {"labels": labels, "annotations": {"governance.promptless.ai/config-hash": config_hash}},
         "spec": {
             "serviceAccountName": spec.service_account_name,
+            "nodeSelector": dict(spec.node_selector),
             "automountServiceAccountToken": True,
             "securityContext": {
                 "runAsNonRoot": True,

@@ -1,5 +1,11 @@
 provider "azurerm" {
-  features {}
+  features {
+    storage {
+      # Account creation precedes its private endpoint, so skip data-plane probes.
+      # https://github.com/hashicorp/terraform-provider-azurerm/blob/v4.36.0/internal/services/storage/storage_account_resource.go#L1520-L1533
+      data_plane_available = false
+    }
+  }
   subscription_id                 = var.subscription_id
   storage_use_azuread             = true
   resource_provider_registrations = "none"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from datetime import datetime, timedelta
 from pathlib import Path
 from time import monotonic
@@ -26,9 +27,15 @@ PLURALS = {
 
 
 class KubeError(RuntimeError):
-    def __init__(self, status: int) -> None:
-        super().__init__(f"Kubernetes API returned {status}")
+    """Expose failed operation metadata without Kubernetes response bodies or credentials."""
+
+    def __init__(self, status: int, method: str = "", path: str = "", reason: str = "") -> None:
+        operation = f"{method} {path}" if method else "API"
+        super().__init__(f"Kubernetes {operation} returned {status}" + (f": {reason}" if reason else ""))
         self.status = status
+        self.method = method
+        self.path = path
+        self.reason = reason
 
 
 def resource_path(kind: str, namespace: str, name: str = "") -> str:
@@ -47,13 +54,13 @@ class Kube:
 
     def request(self, method: str, path: str, **kwargs) -> dict:
         if method != "GET" and "/leases" not in path and monotonic() >= self.lease_deadline:
-            raise KubeError(409)  # Stop writing before another controller can acquire the Lease.
+            raise KubeError(409, method, path, "controller Lease expired")
         headers = kwargs.pop("headers", {})
         if self.token_path:
             headers["Authorization"] = "Bearer " + self.token_path.read_text().strip()
         response = self.client.request(method, path, headers=headers, **kwargs)
         if not response.is_success:
-            raise KubeError(response.status_code)
+            raise KubeError(response.status_code, method, path)
         return response.json()
 
     def get(self, kind: str, namespace: str, name: str) -> dict | None:
@@ -64,7 +71,7 @@ class Kube:
                 return None
             raise
 
-    def list(self, kind: str, namespace: str, selector: str = "") -> list[dict]:
+    def list(self, kind: str, namespace: str, selector: str = "") -> builtins.list[dict]:
         return self.request("GET", resource_path(kind, namespace), params={"labelSelector": selector}).get("items", [])
 
     def apply(self, document: dict) -> dict:
@@ -75,7 +82,7 @@ class Kube:
             expected = metadata.get("ownerReferences", [])
             actual = existing["metadata"].get("ownerReferences", [])
             if expected and not any(owner.get("uid") == expected[0]["uid"] for owner in actual):
-                raise KubeError(409)  # Never adopt customer/GitOps-owned resources.
+                raise KubeError(409, "PATCH", path, "resource belongs to a different owner")
         return self.request(
             "PATCH",
             path,
@@ -97,11 +104,13 @@ class Kube:
         )
 
     def status(self, deployment: dict, status: dict) -> None:
+        """Persist the desired status, explicitly deleting removed fields with a merge patch."""
         metadata = deployment["metadata"]
+        status_patch = {key: None for key in deployment.get("status", {}) if key not in status} | status
         self.request(
             "PATCH",
             resource_path("PIGDeployment", metadata["namespace"], metadata["name"]) + "/status",
-            json={"metadata": {"resourceVersion": metadata["resourceVersion"]}, "status": status},
+            json={"metadata": {"resourceVersion": metadata["resourceVersion"]}, "status": status_patch},
             headers={"Content-Type": "application/merge-patch+json"},
         )
 

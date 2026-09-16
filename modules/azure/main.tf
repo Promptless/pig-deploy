@@ -42,6 +42,22 @@ resource "azurerm_storage_container" "traces" {
   container_access_type = "private"
   lifecycle { prevent_destroy = true }
 }
+resource "azurerm_storage_management_policy" "traces" {
+  storage_account_id = azurerm_storage_account.traces.id
+  rule {
+    name    = "trace-version-recovery"
+    enabled = true
+    filters {
+      prefix_match = ["${azurerm_storage_container.traces.name}/${local.prefix}/"]
+      blob_types   = ["blockBlob"]
+    }
+    actions {
+      version {
+        delete_after_days_since_creation = var.object_recovery_days
+      }
+    }
+  }
+}
 resource "azurerm_private_endpoint" "blob" {
   name                = "${var.name}-blob"
   location            = var.location

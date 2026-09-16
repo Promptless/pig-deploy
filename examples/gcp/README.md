@@ -7,6 +7,18 @@ already configured. Enable the GKE metadata server on the analyzer node pool.
 Cloud SQL private IP, Google APIs, and the selected model endpoint must be
 reachable through customer-managed routes and egress.
 
+On GKE Standard, set `spec.nodeSelector` in `PIGDeployment` to place the analyzer
+and every maintenance Job on nodes with the GKE metadata server:
+
+```yaml
+nodeSelector:
+  iam.gke.io/gke-metadata-server-enabled: "true"
+```
+
+For the manual chart, set the same `nodeSelector` in Helm values. Omit this
+selector on Autopilot. Every Autopilot node supports workload identity, and
+Autopilot rejects this selector. See the [GKE workload identity setup](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity#verify_the_workload_identity_federation_for_gke_setup).
+
 The module binds the exact Kubernetes namespace/ServiceAccount to a dedicated
 Google service account. GCS Object User is restricted by an IAM condition to the
 dedicated trace prefix. The workload receives no Cloud SQL admin or infrastructure

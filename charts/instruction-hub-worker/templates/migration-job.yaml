@@ -29,7 +29,11 @@ spec:
       {{- end }}
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ default "default" .Values.migrationJob.serviceAccountName | quote }}
+      serviceAccountName: {{ include "instruction-hub-worker.serviceAccountName" . | quote }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

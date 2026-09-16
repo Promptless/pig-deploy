@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from datetime import datetime, timedelta
 from uuid import uuid4
@@ -14,7 +15,7 @@ from pydantic import ValidationError
 from .catalog import SelectedRelease, canonical_digest, select_release, verified_bytes
 from .crd import additive_crd
 from .kube import Kube, KubeError
-from .models import DeploymentSpec, Release, stable_version
+from .models import DeploymentSpec, Release, stable_version, validation_details
 from .workloads import analyzer_resources, job_resource, secret_refs
 
 CAPABILITIES = frozenset({"native-storage-v1", "migration-ledger-v1", "controller-self-update-v1", "crd-update-v1"})
@@ -124,8 +125,12 @@ class Controller:
                     "MultipleDeployments",
                     "One PIGDeployment per watched namespace owns this supervisor's release policy.",
                 )
-            if len(deployment["metadata"]["name"]) > 52:
-                raise Blocked("DeploymentNameTooLong", "PIGDeployment names must be at most 52 characters.")
+            name = deployment["metadata"]["name"]
+            if len(name) > 54 or re.fullmatch(r"[a-z](?:[-a-z0-9]*[a-z0-9])?", name) is None:
+                raise Blocked(
+                    "InvalidDeploymentName",
+                    "Use at most 54 lowercase letters, digits, or hyphens, starting with a letter and ending with a letter or digit.",
+                )
             spec = DeploymentSpec.model_validate(deployment["spec"])
             self._check_handoff()
             config_hash = self._configuration_hash(spec)
@@ -298,19 +303,18 @@ class Controller:
             condition(status, "Blocked", True, exc.reason, str(exc), generation, now)
             condition(status, "Ready", False, exc.reason, str(exc), generation, now)
             condition(status, "Updating", bool(status.get("targetDigest")), exc.reason, str(exc), generation, now)
-        except ValidationError:
+        except ValidationError as exc:
+            message = f"Invalid deployment or release configuration: {validation_details(exc)}"
             condition(
                 status,
                 "Blocked",
                 True,
                 "InvalidConfiguration",
-                "Validate the PIGDeployment fields against the installed CRD.",
+                message,
                 generation,
                 now,
             )
-            condition(
-                status, "Ready", False, "InvalidConfiguration", "Configuration validation failed.", generation, now
-            )
+            condition(status, "Ready", False, "InvalidConfiguration", message, generation, now)
         if status != deployment.get("status", {}):
             self.kube.status(deployment, status)
 
@@ -437,9 +441,24 @@ class Controller:
                     ref["uid"] for ref in resource["metadata"].get("ownerReferences", [])
                 }:
                     raise Blocked("OwnershipConflict", "The analyzer Deployment is not owned by this PIGDeployment.")
-                self.kube.patch("Deployment", self.namespace, name, {"spec": {"replicas": 0}})
-                if resource.get("status", {}).get("replicas", 0):
+                # Apply the complete desired Deployment so replica ownership stays with the rollout manager.
+                # https://kubernetes.io/docs/reference/using-api/server-side-apply/#field-management
+                quiesced = analyzer_resources(deployment, spec, selected.release, config_hash)[0]
+                quiesced["spec"]["replicas"] = 0
+                resource = self.kube.apply(quiesced)
+                state = resource.get("status", {})
+                if state.get("observedGeneration", 0) < resource["metadata"].get("generation", 1) or state.get(
+                    "replicas", 0
+                ):
                     return
+            # Replica counts exclude terminating Pods, which can still be using the database.
+            # https://github.com/kubernetes/kubernetes/blob/v1.32.0/pkg/controller/deployment/recreate.go#L89-L116
+            selector = f"app.kubernetes.io/name={name},app.kubernetes.io/component=analyzer"
+            if any(
+                pod.get("status", {}).get("phase") not in {"Succeeded", "Failed"}
+                for pod in self.kube.list("Pod", self.namespace, selector)
+            ):
+                return
         elif phase == "rollout":
             for resource in analyzer_resources(deployment, spec, selected.release, config_hash):
                 self.kube.apply(resource)
@@ -482,6 +501,7 @@ class Controller:
         *,
         start: bool = True,
     ) -> bool:
+        """Run a phase Job, or observe whether no transaction remains when start is false."""
         resource = job_resource(
             deployment,
             spec,
@@ -497,7 +517,7 @@ class Controller:
         if job is None:
             if start:
                 self.kube.apply(resource)
-            return False
+            return not start
         if job.get("status", {}).get("succeeded", 0):
             return True
         if job.get("status", {}).get("failed", 0):
@@ -525,11 +545,24 @@ class Controller:
 
     @staticmethod
     def _deployment_ready(resource: dict, image: str) -> bool:
+        """Check the observed rollout and surface its deadline failure for repair selection."""
         state = resource.get("status", {})
+        if resource["spec"]["template"]["spec"]["containers"][0]["image"] != image or state.get(
+            "observedGeneration", 0
+        ) < resource["metadata"].get("generation", 1):
+            return False
+        if any(
+            entry.get("type") == "Progressing"
+            and entry.get("status") == "False"
+            and entry.get("reason") == "ProgressDeadlineExceeded"
+            for entry in state.get("conditions", [])
+        ):
+            raise Blocked(
+                "RolloutFailed",
+                "A Deployment exceeded its progress deadline. Inspect its Pods and correct the failure or select a compatible repair release.",
+            )
         return (
-            resource["spec"]["template"]["spec"]["containers"][0]["image"] == image
-            and state.get("observedGeneration", 0) >= resource["metadata"].get("generation", 1)
-            and state.get("updatedReplicas", 0) == 1
+            state.get("updatedReplicas", 0) == 1
             and state.get("availableReplicas", 0) == 1
             and state.get("replicas", 0) == 1
         )

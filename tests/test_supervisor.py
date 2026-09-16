@@ -100,9 +100,11 @@ def client_for(*documents):
 
 class FakeKube:
     def __init__(self):
-        self.documents = {}
+        self.documents: dict[tuple[str, str, str], dict] = {}
         self.applied = []
         self.flux = []
+        self.pods = []
+        self.rollout_failure = False
         self.documents[("ServiceAccount", "pig", "pig-analyzer")] = {"metadata": {"resourceVersion": "1"}}
         self.documents[("Secret", "pig", "pig-credentials")] = {
             "metadata": {"resourceVersion": "1"},
@@ -121,8 +123,11 @@ class FakeKube:
     def get(self, kind, namespace, name):
         return self.documents.get((kind, namespace, name))
 
-    def list(self, kind, namespace):
-        return self.flux if kind == "HelmRelease" else []
+    def list(self, kind, namespace, selector=""):
+        if kind == "HelmRelease":
+            return self.flux
+        labels = {key: value for key, _, value in (part.partition("=") for part in selector.split(",") if part)}
+        return [pod for pod in self.pods if all(pod["metadata"]["labels"].get(k) == v for k, v in labels.items())]
 
     def apply(self, resource):
         self.applied.append(deepcopy(resource))
@@ -130,8 +135,21 @@ class FakeKube:
         previous = self.documents.get(key, {})
         result = deepcopy(resource)
         if resource["kind"] == "Deployment":
-            result["metadata"]["generation"] = 1
-            result["status"] = {"observedGeneration": 1, "updatedReplicas": 1, "availableReplicas": 1, "replicas": 1}
+            generation = previous.get("metadata", {}).get("generation", 0)
+            generation += previous.get("spec") != resource["spec"]
+            result["metadata"]["generation"] = generation
+            replicas = resource["spec"]["replicas"]
+            result["status"] = {
+                "observedGeneration": generation,
+                "updatedReplicas": replicas,
+                "availableReplicas": replicas,
+                "replicas": replicas,
+            }
+            if self.rollout_failure and replicas:
+                result["status"].update(
+                    availableReplicas=0,
+                    conditions=[{"type": "Progressing", "status": "False", "reason": "ProgressDeadlineExceeded"}],
+                )
         else:
             result["status"] = previous.get("status", {})
         self.documents[key] = result
@@ -140,6 +158,7 @@ class FakeKube:
     def patch(self, kind, namespace, name, patch):
         resource = self.get(kind, namespace, name)
         if "replicas" in patch.get("spec", {}):
+            resource["spec"]["replicas"] = patch["spec"]["replicas"]
             resource["status"]["replicas"] = patch["spec"]["replicas"]
         else:
             resource["spec"]["template"]["spec"]["containers"][0]["image"] = patch["spec"]["template"]["spec"][
@@ -575,6 +594,7 @@ def test_compatible_rollback_runs_fresh_preflight_instead_of_reusing_old_success
         controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
         controller.reconcile(document, 1, NOW)
         assert document["status"]["phase"] == "preflight"
+
         controller.reconcile(document, 1, NOW)
         created = kube.applied[-1]
         assert created["kind"] == "Job" and created["metadata"]["name"] not in old_jobs
@@ -582,3 +602,192 @@ def test_compatible_rollback_runs_fresh_preflight_instead_of_reusing_old_success
         assert document["status"]["phase"] == "preflight"
         controller.reconcile(document, 1, NOW)
         assert document["status"]["phase"] == "preflight"
+
+
+@pytest.mark.parametrize("name", ["acme.prod", "123acme", "-acme", "acme-", "Acme", "a" * 55])
+def test_invalid_child_service_name_blocks_before_external_checks(name: str) -> None:
+    kube, document = FakeKube(), deployment()
+    document["metadata"]["name"] = name
+    with httpx.Client(transport=httpx.MockTransport(lambda request: pytest.fail("unexpected catalog fetch"))) as client:
+        Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor").reconcile(document, 1, NOW)
+    assert reason(document) == "InvalidDeploymentName"
+    assert not kube.applied
+
+
+@pytest.mark.parametrize("name", ["a", "acme-1", "a" * 54])
+def test_valid_child_service_name_can_start_installation(name: str) -> None:
+    kube, document = FakeKube(), deployment()
+    document["metadata"]["name"] = name
+    with client_for(manifest()) as client:
+        Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor").reconcile(document, 1, NOW)
+    assert document["status"]["targetVersion"] == "1.0.0"
+
+
+@pytest.mark.parametrize("job_state", [None, {}, {"active": 1}, {"succeeded": 1}, {"failed": 1}])
+def test_configuration_rotation_at_migration_checkpoint(job_state: dict[str, int] | None) -> None:
+    kube, document = FakeKube(), deployment()
+    with client_for(manifest()) as client:
+        reconcile_to_ready(kube, document, client)
+    with client_for(manifest(), manifest("2.0.0")) as client:
+        controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
+        for _ in range(12):
+            controller.reconcile(document, 1, NOW)
+            kube.finish_jobs()
+            if document["status"]["phase"] == "migration":
+                break
+        assert document["status"]["phase"] == "migration"
+        assert kube.get("Deployment", "pig", "acme-analyzer")["spec"]["replicas"] == 0
+        previous_transition = document["status"]["transitionID"]
+        if job_state is not None:
+            controller.reconcile(document, 1, NOW)
+            assert kube.applied[-1]["kind"] == "Job"
+            job = kube.get("Job", "pig", kube.applied[-1]["metadata"]["name"])
+            job["status"] = job_state
+        kube.get("Secret", "pig", "pig-credentials")["metadata"]["resourceVersion"] = "2"
+        controller.reconcile(document, 1, NOW)
+        if job_state is not None and not (job_state.get("succeeded") or job_state.get("failed")):
+            assert reason(document) == "WaitingForMigration"
+            assert document["status"]["transitionID"] == previous_transition
+            return
+        assert document["status"]["phase"] == "preflight"
+        assert document["status"]["transitionID"] != previous_transition
+        for _ in range(24):
+            controller.reconcile(document, 1, NOW)
+            kube.finish_jobs()
+            if document["status"].get("currentVersion") == "2.0.0":
+                break
+        assert document["status"]["currentVersion"] == "2.0.0"
+        assert kube.get("Deployment", "pig", "acme-analyzer")["spec"]["replicas"] == 1
+
+
+def test_quiesce_waits_for_terminating_analyzer_pods_and_resumes_with_apply() -> None:
+    kube, document = FakeKube(), deployment()
+    with client_for(manifest()) as client:
+        reconcile_to_ready(kube, document, client)
+    with client_for(manifest(), manifest("2.0.0")) as client:
+        controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
+        for _ in range(12):
+            controller.reconcile(document, 1, NOW)
+            kube.finish_jobs()
+            if document["status"]["phase"] == "quiesce":
+                break
+        kube.pods = [
+            {
+                "metadata": {
+                    "deletionTimestamp": NOW.isoformat(),
+                    "labels": {"app.kubernetes.io/name": "acme-analyzer", "app.kubernetes.io/component": "analyzer"},
+                },
+                "status": {"phase": "Running"},
+            },
+            {
+                "metadata": {
+                    "labels": {"app.kubernetes.io/name": "acme-analyzer", "app.kubernetes.io/component": "maintenance"},
+                },
+                "status": {"phase": "Running"},
+            },
+        ]
+        before = len(kube.applied)
+        controller.reconcile(document, 1, NOW)
+        assert document["status"]["phase"] == "quiesce"
+        quiesced = kube.get("Deployment", "pig", "acme-analyzer")
+        assert quiesced["spec"]["replicas"] == quiesced["status"]["replicas"] == 0
+        assert [resource["kind"] for resource in kube.applied[before:]] == ["Deployment"]
+        kube.pods[0]["status"]["phase"] = "Succeeded"
+        controller.reconcile(document, 1, NOW)
+        assert document["status"]["phase"] == "migration"
+        for _ in range(24):
+            controller.reconcile(document, 1, NOW)
+            kube.finish_jobs()
+            if document["status"].get("currentVersion") == "2.0.0":
+                break
+        assert document["status"]["currentVersion"] == "2.0.0"
+        replicas = [
+            resource["spec"]["replicas"] for resource in kube.applied[before:] if resource["kind"] == "Deployment"
+        ]
+        assert replicas[:2] == [0, 0] and replicas[-1] == 1
+
+
+def test_failed_analyzer_rollout_can_select_a_new_stable_repair() -> None:
+    kube, document = FakeKube(), deployment()
+    kube.rollout_failure = True
+    with client_for(manifest()) as client:
+        controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
+        for _ in range(12):
+            controller.reconcile(document, 1, NOW)
+            kube.finish_jobs()
+            if reason(document) == "RolloutFailed":
+                break
+    assert reason(document) == "RolloutFailed"
+    assert document["status"]["phase"] == "rollout"
+    kube.rollout_failure = False
+    with client_for(manifest(), manifest("1.0.1")) as client:
+        reconcile_to_ready(kube, document, client)
+    assert document["status"]["currentVersion"] == "1.0.1"
+
+
+def test_rollout_failure_from_an_older_generation_is_not_current() -> None:
+    resource = {
+        "metadata": {"generation": 2},
+        "spec": {"template": {"spec": {"containers": [{"image": "target"}]}}},
+        "status": {
+            "observedGeneration": 1,
+            "conditions": [{"type": "Progressing", "status": "False", "reason": "ProgressDeadlineExceeded"}],
+        },
+    }
+    assert not Controller._deployment_ready(resource, "target")
+    resource["status"]["observedGeneration"] = 2
+    with pytest.raises(Blocked, match="progress deadline"):
+        Controller._deployment_ready(resource, "target")
+
+
+def test_quiesce_and_rollout_use_the_same_apply_owner() -> None:
+    """Replica changes keep the complete owned Deployment under one apply manager."""
+    document = deployment()
+    spec = DeploymentSpec.model_validate(document["spec"])
+    selected = SelectedRelease(Release.model_validate(manifest()), "a" * 64)
+    live = analyzer_resources(document, spec, selected.release, "config")[0]
+    replica_writes = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal live
+        if request.url.path.endswith("/pods"):
+            return httpx.Response(200, json={"items": []})
+        if request.method == "PATCH":
+            assert request.headers["Content-Type"] == "application/apply-patch+yaml"
+            assert request.url.params["fieldManager"] == "pig-supervisor"
+            assert request.url.params["force"] == "false"
+            applied = json.loads(request.content)
+            if applied["kind"] == "Deployment":
+                live = applied
+                replica_writes.append(live["spec"]["replicas"])
+            else:
+                return httpx.Response(200, json=applied)
+        elif not request.url.path.endswith("/deployments/acme-analyzer"):
+            return httpx.Response(404, json={})
+        replicas = live["spec"]["replicas"]
+        live["metadata"]["generation"] = 1
+        live["status"] = {
+            "observedGeneration": 1,
+            "replicas": replicas,
+            "updatedReplicas": replicas,
+            "availableReplicas": replicas,
+        }
+        return httpx.Response(200, json=live)
+
+    with (
+        httpx.Client(base_url="https://kubernetes.example", transport=httpx.MockTransport(respond)) as api,
+        client_for(manifest()) as catalog,
+    ):
+        kube = Kube(api)
+        kube.lease_deadline = monotonic() + 60
+        controller = Controller(kube, catalog, CATALOG, "pig", "pig-system", "pig-supervisor")
+        status = {"phase": "quiesce", "currentDigest": selected.digest}
+        controller._advance(document, spec, selected, "config", status, NOW)
+        assert status["phase"] == "rollout"
+        controller._advance(document, spec, selected, "config", status, NOW)
+        assert status["phase"] == "verify"
+    assert replica_writes == [0, 1]
+    assert (
+        live["spec"]["template"]
+        == analyzer_resources(document, spec, selected.release, "config")[0]["spec"]["template"]
+    )

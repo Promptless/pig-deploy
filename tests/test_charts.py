@@ -10,6 +10,21 @@ ROOT = Path(__file__).resolve().parents[1]
 DIGEST = "sha256:" + "a" * 64
 
 
+@pytest.fixture
+def worker_values() -> dict[str, object]:
+    """Supply the required manual-chart settings without changing identity defaults."""
+    return {
+        "image": {"digest": DIGEST},
+        "instructionHub": {
+            "runtimeBaseUrl": "https://runtime.example.com",
+            "deploymentInstanceId": "test",
+            "configHash": "test",
+            "traceObjectS3Bucket": "acme-traces",
+        },
+        "secrets": {"existingSecretName": "pig-credentials"},
+    }
+
+
 def render(chart, values, tmp_path):
     path = tmp_path / "values.yaml"
     path.write_text(yaml.safe_dump(values))
@@ -56,8 +71,8 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
         {
             "image": {"digest": DIGEST},
             "serviceAccount": {"create": False, "name": "pig-analyzer"},
-            "migrationJob": {"serviceAccountName": "pig-analyzer"},
             "podLabels": {"azure.workload.identity/use": "true"},
+            "nodeSelector": {"iam.gke.io/gke-metadata-server-enabled": "true"},
             "instructionHub": {
                 "runtimeBaseUrl": "https://runtime.example.com",
                 "deploymentInstanceId": "test",
@@ -76,6 +91,7 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
     for doc in (deployment, job):
         template = doc["spec"]["template"]
         assert template["spec"]["serviceAccountName"] == "pig-analyzer"
+        assert template["spec"]["nodeSelector"] == {"iam.gke.io/gke-metadata-server-enabled": "true"}
         assert template["metadata"]["labels"]["azure.workload.identity/use"] == "true"
         container = template["spec"]["containers"][0]
         env = {e["name"]: e for e in container["env"]}
@@ -87,6 +103,54 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
     assert job["spec"]["template"]["metadata"]["labels"]["app.kubernetes.io/component"] == "maintenance"
     assert deployment["spec"]["strategy"]["type"] == "Recreate"
     assert job["spec"]["backoffLimit"] == 0
+
+
+def test_manual_default_migration_uses_preexisting_shared_account(
+    worker_values: dict[str, object], tmp_path: Path
+) -> None:
+    """Pre-install migration must use the same external identity as the analyzer."""
+    docs = render("instruction-hub-worker", worker_values, tmp_path)
+
+    assert not any(doc["kind"] == "ServiceAccount" for doc in docs)
+    workloads = [doc for doc in docs if doc["kind"] in {"Deployment", "Job"}]
+    assert len(workloads) == 2
+    for workload in workloads:
+        assert workload["spec"]["template"]["spec"]["serviceAccountName"] == "pig-analyzer"
+        assert "nodeSelector" not in workload["spec"]["template"]["spec"]
+
+
+def test_manual_rejects_chart_created_identity_before_migration(
+    worker_values: dict[str, object], tmp_path: Path
+) -> None:
+    """Reject a pre-install Job that would wait for an account installed after it."""
+    worker_values["serviceAccount"] = {"create": True, "name": "pig-analyzer"}
+
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        render("instruction-hub-worker", worker_values, tmp_path)
+
+    assert "pre-existing shared ServiceAccount" in (error.value.stdout or "") + (error.value.stderr or "")
+
+
+def test_manual_can_create_identity_with_external_migrations(worker_values: dict[str, object], tmp_path: Path) -> None:
+    """The chart may own its identity when migrations are managed separately."""
+    worker_values["serviceAccount"] = {"create": True, "name": "custom-analyzer"}
+    worker_values["migrationJob"] = {"enabled": False}
+
+    docs = render("instruction-hub-worker", worker_values, tmp_path)
+
+    assert not any(doc["kind"] == "Job" for doc in docs)
+    account = next(doc for doc in docs if doc["kind"] == "ServiceAccount")
+    deployment = next(doc for doc in docs if doc["kind"] == "Deployment")
+    assert account["metadata"]["name"] == "custom-analyzer"
+    assert deployment["spec"]["template"]["spec"]["serviceAccountName"] == account["metadata"]["name"]
+
+
+def test_manual_rejects_separate_migration_identity(worker_values: dict[str, object], tmp_path: Path) -> None:
+    """A distinct migration ServiceAccount is outside the shared identity contract."""
+    worker_values["migrationJob"] = {"serviceAccountName": "different-account"}
+
+    with pytest.raises(subprocess.CalledProcessError):
+        render("instruction-hub-worker", worker_values, tmp_path)
 
 
 def test_supervisor_grants_no_identity_secret_or_rbac_writes(tmp_path):

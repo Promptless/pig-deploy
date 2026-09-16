@@ -24,12 +24,15 @@ instruction-hub-worker
 {{- end -}}
 
 {{- define "instruction-hub-worker.serviceAccountName" -}}
+{{- if and .Values.migrationJob.enabled .Values.serviceAccount.create -}}
+{{- fail "migrationJob.enabled requires a pre-existing shared ServiceAccount; set serviceAccount.create=false and serviceAccount.name to that account" -}}
+{{- end -}}
 {{- if .Values.serviceAccount.name -}}
 {{- .Values.serviceAccount.name -}}
 {{- else if .Values.serviceAccount.create -}}
 {{- include "instruction-hub-worker.fullname" . -}}
 {{- else -}}
-default
+{{- fail "serviceAccount.name is required when serviceAccount.create=false" -}}
 {{- end -}}
 {{- end -}}
 

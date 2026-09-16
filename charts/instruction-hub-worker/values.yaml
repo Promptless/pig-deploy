@@ -20,8 +20,9 @@ observability:
     existingSecretName: ''
     dsnKey: SENTRY_DSN
 serviceAccount:
-  create: true
-  name: ''
+  # Deliver this account before installation when migrationJob.enabled is true.
+  create: false
+  name: pig-analyzer
   annotations: {}
 gateway:
   enabled: false
@@ -86,7 +87,6 @@ secrets:
   analysisRepositoryToken: ''
 migrationJob:
   enabled: true
-  serviceAccountName: default
 resources:
   requests:
     cpu: 500m
@@ -95,3 +95,4 @@ resources:
     memory: 2Gi
 podAnnotations: {}
 podLabels: {}
+nodeSelector: {}

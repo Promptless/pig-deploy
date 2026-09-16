@@ -18,8 +18,22 @@ from pydantic import ValidationError
 from .catalog import CatalogError
 from .controller import Controller, condition
 from .kube import Kube, KubeError
+from .models import validation_details
 
 logger = logging.getLogger("pig-supervisor")
+
+
+def describe_failure(error: httpx.HTTPError | CatalogError | ValidationError | KubeError) -> str:
+    """Describe dependency failures without logging response bodies, URL credentials, or rejected values."""
+    if isinstance(error, ValidationError):
+        return f"ValidationError: {validation_details(error)}"
+    if isinstance(error, httpx.HTTPError):
+        request = error.request
+        operation = f"{request.method} {request.url.host}"
+        if isinstance(error, httpx.HTTPStatusError):
+            return f"HTTPStatusError: {operation} returned {error.response.status_code}"
+        return f"{type(error).__name__}: {operation}"
+    return f"{type(error).__name__}: {error}"
 
 
 def main() -> None:
@@ -63,24 +77,24 @@ def main() -> None:
                                 if isinstance(exc, KubeError) and exc.status == 409
                                 else "DependencyUnavailable"
                             )
-                            logger.warning("Reconciliation blocked: %s", reason)
-                            status = deployment.get("status", {})
+                            logger.warning("Reconciliation blocked: %s", describe_failure(exc))
+                            status = dict(deployment.get("status", {}))
                             for key, truth in (("Ready", False), ("Blocked", True)):
                                 condition(
                                     status,
                                     key,
                                     truth,
                                     reason,
-                                    "A catalog or Kubernetes check failed; inspect controller events and retry after correcting access or ownership.",
+                                    "A catalog or Kubernetes check failed; inspect supervisor logs for the failed operation and cause.",
                                     deployment["metadata"]["generation"],
                                     now,
                                 )
                             try:
                                 kube.status(deployment, status)
-                            except KubeError:
-                                logger.warning("Could not update status; the next reconciliation will retry")
-            except (KubeError, httpx.HTTPError):
-                logger.warning("Kubernetes API unavailable; no reconciliation performed")
+                            except (KubeError, httpx.HTTPError) as status_error:
+                                logger.warning("Could not update status: %s", describe_failure(status_error))
+            except (KubeError, httpx.HTTPError) as exc:
+                logger.warning("Kubernetes API unavailable: %s", describe_failure(exc))
             for _ in range(15):
                 if stopped:
                     break

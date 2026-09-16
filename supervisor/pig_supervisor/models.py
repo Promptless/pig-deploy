@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Self
 from urllib.parse import urlsplit
 
 from packaging.version import Version
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 Name = Annotated[str, Field(min_length=1, max_length=63, pattern=r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")]
@@ -17,6 +17,14 @@ Image = Annotated[str, Field(pattern=r"^ghcr\.io/promptless/[a-z0-9-]+@sha256:[a
 
 class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", alias_generator=to_camel, populate_by_name=True)
+
+
+def validation_details(error: ValidationError) -> str:
+    """Identify invalid fields and error types without exposing rejected input or validator context."""
+    return ", ".join(
+        f"{'.'.join(map(str, item['loc'])) or '<root>'}: {item['type']}"
+        for item in error.errors(include_input=False, include_context=False, include_url=False)
+    )
 
 
 class SecretRef(Contract):
@@ -166,6 +174,7 @@ class DeploymentSpec(Contract):
     release: ReleasePolicy = Field(default_factory=ReleasePolicy)
     service_account_name: Name
     pod_labels: dict[str, str] = Field(default_factory=dict)
+    node_selector: dict[str, str] = Field(default_factory=dict)
     hosted: Hosted
     endpoint: Endpoint
     storage: Storage

@@ -12,6 +12,7 @@ spec:
       configMapRef: pig-release-confirmation
   serviceAccountName: pig-analyzer
   podLabels: {} # Copy deployment_configuration.pod_labels, including Azure identity labels.
+  nodeSelector: {} # See examples/gcp/README.md for the GKE Standard identity selector.
   hosted:
     runtimeURL: https://api.promptless.ai
     deploymentID: REPLACE_HOSTED_DEPLOYMENT_ID
@@ -20,6 +21,8 @@ spec:
     hostname: pig.example.com
     ingressClassName: nginx
     tlsSecretName: pig-tls
+    ingressAnnotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: "256m"
   storage:
     postgres:
       dsnSecretRef: {name: pig-credentials, key: postgres-dsn}

@@ -13,6 +13,10 @@ the CRD, so automatic CRD changes must be optional, additive, and within the
 named CRD permissions granted at bootstrap. New capabilities block the release
 until an operator reviews and applies a bootstrap upgrade.
 
+Name the `PIGDeployment` with at most 54 lowercase letters, digits, or hyphens.
+Start with a letter and end with a letter or digit so its generated Service name
+meets Kubernetes naming rules.
+
 GitOps owns `PIGDeployment`, external Secret delivery, the analyzer ServiceAccount,
 and public CA ConfigMaps. PIG owns the generated analyzer Deployment, Service,
 Ingress, and maintenance Jobs through Kubernetes owner references. It refuses to
@@ -33,6 +37,7 @@ and, for private repositories, `repository-token`. The PostgreSQL DSN must use
 `sslmode=verify-full`. `storage.postgres.caConfigMapRef` mounts its selected key at
 `/etc/pig/postgres-ca/ca.pem` and sets `PGSSLROOTCERT`. Analyzer and maintenance Jobs
 share the same ServiceAccount, native workload identity, labels, and CA mount.
+Set `spec.nodeSelector` to restrict both to nodes configured for that identity.
 Secrets, CA, and ServiceAccount revisions trigger revalidation and analyzer
 restart, including while release updates are paused. PIG never edits these
 customer-owned objects.
@@ -53,11 +58,12 @@ blocks installation.
 
 The supervisor records progress in CR status through preflight, quiesce,
 migration, analyzer rollout, verification, and supervisor rollout. It scales the
-existing analyzer to zero before migration and starts a single analyzer replica
-afterwards. Jobs use immutable images and names bound to the release,
-configuration, and saved transition ID. A new transition runs fresh checks rather
-than reusing an earlier successful Job. PostgreSQL records schema checksums and release checkpoints in
-`pig_schema_migrations` and `pig_deployment_history`. A restart resumes the saved
+existing analyzer to zero and waits for its Pods to exit before migration. It
+starts a single analyzer replica afterwards. Jobs use immutable images and names
+bound to the release, configuration, and saved transition ID. A new transition runs
+fresh checks rather than reusing an earlier successful Job. PostgreSQL records
+schema checksums and release checkpoints in `pig_schema_migrations` and
+`pig_deployment_history`. A restart resumes the saved
 transition; a failed Job retries after the operator corrects its cause.
 
 Live checks include PostgreSQL version, schema compatibility, verified TLS,
@@ -66,6 +72,10 @@ availability is checked before `Ready=True`. A failed dependency check sets
 `Blocked=True` with the Job to inspect. Change cloud resources through Terraform;
 checks retry automatically. Declared Terraform capacity is never mirrored into
 PIG or presented as observed free capacity.
+
+A rollout that exceeds its Kubernetes progress deadline sets `Blocked=True`.
+Correct the Pod failure or select a compatible repair release. An unpinned stable
+policy can select a newer release after a failed rollout.
 
 Rollback is available only when the current manifest explicitly lists the target
 release digest in `rollbackTo` and both releases use the same schema revision.
@@ -121,9 +131,10 @@ Dashboard during installation acceptance.
 
 ## Manual chart
 
-The manual chart is for operator-managed releases. Its pre-upgrade migration
-hook requires the operator to quiesce the existing analyzer before upgrading.
+The [manual chart](charts/instruction-hub-worker/README.md) is for operator-managed
+releases. Its pre-upgrade migration hook requires the operator to quiesce the
+existing analyzer before upgrading.
 It does not enforce the supervisor's release confirmation ConfigMap. Supply a
-compatible immutable analyzer image, a verified recovery point, and the shared
-analyzer/migration ServiceAccount. Do not install the manual analyzer and a
-supervised analyzer for the same deployment.
+compatible immutable analyzer image and a verified recovery point. Create the
+shared analyzer and migration ServiceAccount before installing the chart. Do not
+install the manual analyzer and a supervised analyzer for the same deployment.

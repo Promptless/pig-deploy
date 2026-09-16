@@ -58,6 +58,10 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                type: object
               hosted:
                 properties:
                   runtimeURL:

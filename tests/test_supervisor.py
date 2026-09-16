@@ -826,7 +826,44 @@ def test_failed_target_cannot_restore_old_analyzer_after_incompatible_migration(
         assert len(kube.applied) == before
 
 
-def test_compatible_rollback_runs_fresh_preflight_instead_of_reusing_old_success():
+@pytest.mark.parametrize("repair_checkpoint", [False, True])
+@pytest.mark.parametrize("legacy_boundary", [False, True])
+def test_unfinished_repair_cannot_authorize_rollback_of_an_earlier_migration(repair_checkpoint, legacy_boundary):
+    kube, document = FakeKube(), deployment()
+    with client_for(manifest()) as client:
+        original = select_release(client, CATALOG)
+        reconcile_to_ready(kube, document, client)
+    migrated = manifest("2.0.0", schemaFrom=[1], schemaTo=2)
+    with client_for(manifest(), migrated) as client:
+        upgrade_to_phase(kube, document, client, "verify")
+    if legacy_boundary:
+        document["status"].pop("migrationDigest")
+    migration_digest = document["status"].get("migrationDigest")
+    repair = {**manifest("3.0.0"), "rollbackTo": [original.digest]}
+    document["spec"]["release"] = {"pinnedVersion": "3.0.0"}
+    with client_for(manifest(), migrated, repair) as client:
+        controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
+        controller.reconcile(document, 1, NOW)
+        assert document["status"]["targetVersion"] == "3.0.0"
+        assert document["status"]["phase"] == "preflight"
+        if repair_checkpoint:
+            for _ in range(4):
+                controller.reconcile(document, 1, NOW)
+                kube.finish_jobs()
+                if document["status"]["phase"] == "migration":
+                    break
+            assert document["status"]["phase"] == "migration"
+        assert document["status"].get("migrationDigest") == migration_digest
+        document["spec"]["release"] = {"pinnedVersion": "1.0.0"}
+        before = len(kube.applied)
+        controller.reconcile(document, 1, NOW)
+        assert reason(document) == "RollbackUnsupported"
+        assert document["status"]["targetVersion"] == "3.0.0"
+        assert len(kube.applied) == before
+
+
+@pytest.mark.parametrize("unfinished", [False, True])
+def test_compatible_rollback_runs_fresh_preflight_instead_of_reusing_old_success(unfinished):
     kube, document = FakeKube(), deployment()
     with client_for(manifest()) as client:
         original = select_release(client, CATALOG)
@@ -836,9 +873,11 @@ def test_compatible_rollback_runs_fresh_preflight_instead_of_reusing_old_success
         for _ in range(24):
             Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor").reconcile(document, 1, NOW)
             kube.finish_jobs()
+            if unfinished and document["status"]["phase"] == "verify":
+                break
             if document["status"].get("currentVersion") == "2.0.0":
                 break
-        assert document["status"]["currentVersion"] == "2.0.0"
+        assert document["status"]["currentVersion"] == ("1.0.0" if unfinished else "2.0.0")
         old_jobs = {name for kind, _, name in kube.documents if kind == "Job"}
         document["spec"]["release"] = {"pinnedVersion": "1.0.0"}
         controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
@@ -925,7 +964,7 @@ def test_configuration_rotation_at_migration_checkpoint(job_state: dict | None) 
 
 
 @pytest.mark.parametrize("action", ["retry", "repair", "rotate"])
-@pytest.mark.parametrize("outcome", ["Failed", "Complete"])
+@pytest.mark.parametrize("outcome", ["Failed", "Complete", "deleted"])
 def test_terminal_migration_waits_for_terminating_pods(action, outcome):
     kube, document = FakeKube(), deployment()
     with client_for(manifest()) as client:
@@ -944,6 +983,8 @@ def test_terminal_migration_waits_for_terminating_pods(action, outcome):
             "status": {"phase": "Running"},
         }
     ]
+    if outcome == "deleted":
+        del kube.documents[("Job", "pig", job["metadata"]["name"])]
     releases = [manifest(), manifest("2.0.0")]
     if action == "repair":
         releases.append(manifest("2.0.1"))
@@ -971,6 +1012,10 @@ def test_terminal_migration_waits_for_terminating_pods(action, outcome):
             assert document["status"]["transitionID"] != transition
         elif outcome == "Complete":
             assert document["status"]["phase"] == "rollout"
+        elif outcome == "deleted":
+            assert len(kube.applied) == before + 1
+            assert kube.applied[-1]["kind"] == "Job"
+            assert kube.applied[-1]["metadata"]["name"] == job["metadata"]["name"]
         else:
             assert reason(document) == "MigrationBlocked"
             assert "retryAt" in document["status"]

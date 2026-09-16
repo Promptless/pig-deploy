@@ -61,6 +61,8 @@ installed release available for configuration rotation, including without catalo
 access. After that checkpoint, resume the transition before rotating configuration;
 the old analyzer may no longer be compatible with the database. This restriction
 also applies to older in-progress status that lacks a recorded migration boundary.
+After selecting a forward repair for a transition that may have migrated, finish
+the repair before using its rollback declarations to select an older release.
 
 The supervisor records progress in CR status through preflight, quiesce,
 migration, analyzer rollout, verification, and supervisor rollout. It scales the

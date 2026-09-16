@@ -197,8 +197,9 @@ class Controller:
                             status.get("attempt", 0),
                             transition=status.get("transitionID", ""),
                         )
-                        job = self.kube.get("Job", self.namespace, active["metadata"]["name"])
-                        if job and (job_outcome(job) is None or self._migration_pods_running(job)):
+                        name = active["metadata"]["name"]
+                        job = self.kube.get("Job", self.namespace, name)
+                        if (job and job_outcome(job) is None) or self._migration_pods_running(name):
                             raise Blocked(
                                 "WaitingForMigration",
                                 "The current migration must finish before selecting the requested repair release.",
@@ -207,13 +208,14 @@ class Controller:
                         status.get("migrationMayHaveRun", True)
                         and stable_version(requested.release.version) < stable_version(selected.release.version)
                         and (
-                            requested.digest not in selected.release.rollback_to
+                            status.get("migrationDigest") != selected.digest
+                            or requested.digest not in selected.release.rollback_to
                             or requested.release.requirements.schema_to != selected.release.requirements.schema_to
                         )
                     ):
                         raise Blocked(
                             "RollbackUnsupported",
-                            "The in-progress release may have changed the schema. Select its declared compatible rollback or a forward repair release.",
+                            "The in-progress release may have changed the schema. Use its declared compatible rollback, or finish a forward repair before downgrading.",
                         )
                     selected = requested
                     # A repair cannot prove the schema history of an older controller's status.
@@ -495,6 +497,7 @@ class Controller:
                 attempt=0,
                 migrationMayHaveRun=False,
             )
+            status.pop("migrationDigest", None)
             return
         # Configuration and credential rotation do not repeat a release migration.
         next_phase = (
@@ -506,6 +509,10 @@ class Controller:
         if next_phase == "migration":
             # Persist the hazard before a later reconcile can create a migration Job.
             # Keep it through configuration resets and repair-release selection.
+            # A selected repair's rollback claims cannot describe earlier migrations
+            # until that repair completes. Preserve the first boundary across repairs.
+            if status.get("migrationMayHaveRun") is False:
+                status["migrationDigest"] = selected.digest
             status["migrationMayHaveRun"] = True
 
     def _job(
@@ -533,13 +540,13 @@ class Controller:
         )
         name = resource["metadata"]["name"]
         job = self.kube.get("Job", self.namespace, name)
+        if phase == "migration" and self._migration_pods_running(name):
+            return False
         if job is None:
             if start:
                 self.kube.apply(resource)
             return not start
         outcome = job_outcome(job)
-        if phase == "migration" and outcome and self._migration_pods_running(job):
-            return False
         if outcome == "Complete":
             return True
         if outcome == "Failed":
@@ -565,9 +572,10 @@ class Controller:
             )
         return False
 
-    def _migration_pods_running(self, job: dict) -> bool:
-        # Kubernetes 1.30 can report a terminal Job condition before its Pods exit.
-        selector = f"governance.promptless.ai/job={job['metadata']['name']}"
+    def _migration_pods_running(self, name: str) -> bool:
+        # Kubernetes 1.30 can report a terminal condition before Pods exit, and
+        # background deletion can remove the Job before its Pods disappear.
+        selector = f"governance.promptless.ai/job={name}"
         return any(
             pod.get("status", {}).get("phase") not in {"Succeeded", "Failed"}
             for pod in self.kube.list("Pod", self.namespace, selector)

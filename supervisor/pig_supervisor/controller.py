@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from datetime import datetime, timedelta
+from hashlib import sha256
 from uuid import uuid4
 
 import httpx
@@ -53,6 +54,33 @@ def condition(status: dict, name: str, truth: bool, reason: str, message: str, g
     if previous and previous["status"] == value["status"] and previous.get("reason") == reason:
         value["lastTransitionTime"] = previous["lastTransitionTime"]
     status["conditions"] = [entry for entry in status.get("conditions", []) if entry["type"] != name] + [value]
+
+
+def acceptance_condition(status: dict, digest: str, config_hash: str, generation: int, now: datetime) -> None:
+    accepted = status.get("acceptedConfigurationHash") == config_hash and status.get("acceptedReleaseDigest") == digest
+    condition(
+        status,
+        "Acceptance",
+        accepted,
+        "CanonicalSuccess" if accepted else "AwaitingCanonicalAcceptance",
+        "An enrolled host has a readable canonical object, succeeded analysis, and hosted acknowledgement."
+        if accepted
+        else "Enroll a host, ingest a real trace, and wait for analysis and Dashboard synchronization.",
+        generation,
+        now,
+    )
+
+
+def helm_release_name(release: dict) -> str:
+    """Resolve Flux's default name, including its 53-character Helm limit."""
+    # https://fluxcd.io/flux/components/helm/helmreleases/#release-name
+    spec = release.get("spec", {})
+    name = spec.get("releaseName")
+    if not name:
+        name = release["metadata"]["name"]
+        if spec.get("targetNamespace"):
+            name = spec["targetNamespace"] + "-" + name
+    return name if len(name) <= 53 else name[:40] + "-" + sha256(name.encode()).hexdigest()[:12]
 
 
 def recovery_check(spec: DeploymentSpec, selected: SelectedRelease, document: dict | None, now: datetime) -> None:
@@ -221,6 +249,8 @@ class Controller:
                     # A repair cannot prove the schema history of an older controller's status.
                     status.setdefault("migrationMayHaveRun", True)
                     status.update(targetDigest=None, targetVersion=None, phase="preflight")
+            # Historical evidence must not certify the next release or configuration.
+            acceptance_condition(status, selected.digest, config_hash, generation, now)
             if (
                 selected.digest == current_digest
                 and not status.get("targetDigest")
@@ -374,8 +404,14 @@ class Controller:
             raise
         for release in releases:
             spec = release.get("spec", {})
-            release_name = spec.get("releaseName") or release["metadata"]["name"]
-            if release_name == self.supervisor_name and not spec.get("suspend", False):
+            target_namespace = spec.get("targetNamespace") or release["metadata"].get(
+                "namespace", self.system_namespace
+            )
+            if (
+                target_namespace == self.system_namespace
+                and helm_release_name(release) == self.supervisor_name
+                and not spec.get("suspend", False)
+            ):
                 raise Blocked("FluxHandoffRequired", "Suspend the bootstrap HelmRelease before PIG manages releases.")
 
     def _configuration_hash(self, spec: DeploymentSpec) -> str:
@@ -687,18 +723,4 @@ class Controller:
                 status["lastAcceptanceAt"] = job.get("status", {}).get("completionTime", now.isoformat())
                 status["acceptedJob"] = document["metadata"]["name"]
         # A successful check is evidence, not a claim that every future trace has succeeded.
-        accepted = accepted or (
-            status.get("acceptedConfigurationHash") == config_hash
-            and status.get("acceptedReleaseDigest") == selected.digest
-        )
-        condition(
-            status,
-            "Acceptance",
-            accepted,
-            "CanonicalSuccess" if accepted else "AwaitingCanonicalAcceptance",
-            "An enrolled host has a readable canonical object, succeeded analysis, and hosted acknowledgement."
-            if accepted
-            else "Enroll a host, ingest a real trace, and wait for analysis and Dashboard synchronization.",
-            deployment["metadata"]["generation"],
-            now,
-        )
+        acceptance_condition(status, selected.digest, config_hash, deployment["metadata"]["generation"], now)

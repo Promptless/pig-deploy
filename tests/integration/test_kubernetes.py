@@ -187,7 +187,7 @@ def test_chart_install_upgrade_and_process_handoff(deployment):
         NAMESPACE,
         "--type=merge",
         "-p",
-        json.dumps({"spec": {"renewTime": "2000-01-01T00:00:00Z"}}),
+        json.dumps({"spec": {"renewTime": "2000-01-01T00:00:00.000000Z"}}),
     )
     wait_for(
         "the replacement process to acquire leadership",

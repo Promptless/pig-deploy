@@ -8,6 +8,8 @@ and a newer commit cancels superseded checks on the same branch or pull request.
 
 Configure the following status checks in the `main` branch ruleset after their
 first successful run. Adding workflow files does not configure branch protection.
+Dependency review requires GitHub's dependency graph; it and dependency alerts
+are enabled for this repository.
 
 | Check | Coverage |
 | --- | --- |

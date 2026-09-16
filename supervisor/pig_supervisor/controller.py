@@ -13,13 +13,23 @@ from packaging.version import Version
 from pydantic import ValidationError
 
 from .catalog import SelectedRelease, canonical_digest, select_release, verified_bytes
-from .crd import additive_crd
+from .crd import merge_crd
 from .kube import Kube, KubeError
 from .models import DeploymentSpec, Release, stable_version, validation_details
 from .workloads import analyzer_resources, job_resource, secret_refs
 
 CAPABILITIES = frozenset({"native-storage-v1", "migration-ledger-v1", "controller-self-update-v1", "crd-update-v1"})
 PHASES = ("preflight", "quiesce", "migration", "rollout", "verify", "supervisor", "complete")
+
+
+def job_outcome(job: dict | None) -> str | None:
+    """Wait for terminal Job conditions, including failures that never created a Pod."""
+    # Pod counters and FailureTarget can precede termination of the remaining Pods.
+    # https://kubernetes.io/docs/concepts/workloads/controllers/job/#terminal-job-conditions
+    for entry in (job or {}).get("status", {}).get("conditions", []):
+        if entry.get("type") in {"Complete", "Failed"} and entry.get("status") == "True":
+            return entry["type"]
+    return None
 
 
 class Blocked(RuntimeError):
@@ -134,6 +144,23 @@ class Controller:
             spec = DeploymentSpec.model_validate(deployment["spec"])
             self._check_handoff()
             config_hash = self._configuration_hash(spec)
+            if (
+                spec.release.paused
+                and status.get("targetDigest")
+                and status["targetDigest"] != status.get("currentDigest")
+            ):
+                if status.get("currentManifest") and status.get("migrationMayHaveRun") is False:
+                    # Cancel an unstarted upgrade before resolving its catalog entry. The
+                    # installed release can still rotate credentials while offline.
+                    status.update(targetDigest=None, targetVersion=None, phase="complete")
+                    status.pop("retryAt", None)
+                else:
+                    # Phase alone is insufficient: rotation or repair can reset it after
+                    # a migration. Older status without this marker is also unsafe.
+                    raise Blocked(
+                        "Paused",
+                        "Update paused; resume with spec.release.paused=false to finish the schema transition before rotating configuration.",
+                    )
             if status.get("targetDigest") == status.get("currentDigest") and status.get("currentManifest"):
                 selected = SelectedRelease(Release.model_validate(status["currentManifest"]), status["currentDigest"])
             elif status.get("targetDigest"):
@@ -171,13 +198,13 @@ class Controller:
                             transition=status.get("transitionID", ""),
                         )
                         job = self.kube.get("Job", self.namespace, active["metadata"]["name"])
-                        if job and not (job.get("status", {}).get("succeeded") or job.get("status", {}).get("failed")):
+                        if job and (job_outcome(job) is None or self._migration_pods_running(job)):
                             raise Blocked(
                                 "WaitingForMigration",
                                 "The current migration must finish before selecting the requested repair release.",
                             )
                     if (
-                        PHASES.index(status["phase"]) >= PHASES.index("migration")
+                        status.get("migrationMayHaveRun", True)
                         and stable_version(requested.release.version) < stable_version(selected.release.version)
                         and (
                             requested.digest not in selected.release.rollback_to
@@ -189,6 +216,8 @@ class Controller:
                             "The in-progress release may have changed the schema. Select its declared compatible rollback or a forward repair release.",
                         )
                     selected = requested
+                    # A repair cannot prove the schema history of an older controller's status.
+                    status.setdefault("migrationMayHaveRun", True)
                     status.update(targetDigest=None, targetVersion=None, phase="preflight")
             if (
                 selected.digest == current_digest
@@ -246,26 +275,11 @@ class Controller:
                         transitionConfigurationHash=config_hash,
                         transitionID=str(uuid4()),
                     )
+                    status.setdefault("migrationMayHaveRun", False)
                     status.pop("retryAt", None)
                     self._conditions(status, generation, now, ready=False, updating=True)
                 else:
                     phase = status["phase"]
-                    if spec.release.paused and selected.digest != current_digest:
-                        # Jobs are not killed mid-transaction. Observe the migration result before pausing.
-                        if phase == "migration":
-                            self._job(
-                                deployment,
-                                spec,
-                                selected,
-                                status["transitionConfigurationHash"],
-                                phase,
-                                status,
-                                now,
-                                start=False,
-                            )
-                        raise Blocked(
-                            "Paused", "Update paused at a safe checkpoint; resume with spec.release.paused=false."
-                        )
                     if config_hash != status["transitionConfigurationHash"]:
                         # Never replace a running migration because a Secret changed. Wait for its transaction to finish.
                         if phase == "migration" and not self._job(
@@ -479,6 +493,7 @@ class Controller:
                 targetDigest=None,
                 targetVersion=None,
                 attempt=0,
+                migrationMayHaveRun=False,
             )
             return
         # Configuration and credential rotation do not repeat a release migration.
@@ -488,6 +503,10 @@ class Controller:
             else PHASES[PHASES.index(phase) + 1]
         )
         status.update(phase=next_phase, attempt=0)
+        if next_phase == "migration":
+            # Persist the hazard before a later reconcile can create a migration Job.
+            # Keep it through configuration resets and repair-release selection.
+            status["migrationMayHaveRun"] = True
 
     def _job(
         self,
@@ -518,9 +537,12 @@ class Controller:
             if start:
                 self.kube.apply(resource)
             return not start
-        if job.get("status", {}).get("succeeded", 0):
+        outcome = job_outcome(job)
+        if phase == "migration" and outcome and self._migration_pods_running(job):
+            return False
+        if outcome == "Complete":
             return True
-        if job.get("status", {}).get("failed", 0):
+        if outcome == "Failed":
             if not start:
                 return True  # The old transaction has terminated; new credentials may be validated.
             retry_at = datetime.fromisoformat(status.get("retryAt", now.isoformat()))
@@ -542,6 +564,14 @@ class Controller:
                 f"Inspect Job {name}; correct infrastructure through Terraform or deliver the required configuration. Checks retry automatically.",
             )
         return False
+
+    def _migration_pods_running(self, job: dict) -> bool:
+        # Kubernetes 1.30 can report a terminal Job condition before its Pods exit.
+        selector = f"governance.promptless.ai/job={job['metadata']['name']}"
+        return any(
+            pod.get("status", {}).get("phase") not in {"Succeeded", "Failed"}
+            for pod in self.kube.list("Pod", self.namespace, selector)
+        )
 
     @staticmethod
     def _deployment_ready(resource: dict, image: str) -> bool:
@@ -588,7 +618,8 @@ class Controller:
                 raise Blocked("CRDUpgradeUnsupported", "The release CRD exceeds the granted bootstrap contract.")
             path = "/apis/apiextensions.k8s.io/v1/customresourcedefinitions/pigdeployments.governance.promptless.ai"
             installed = self.kube.request("GET", path)
-            if not additive_crd(installed["spec"], crd["spec"]):
+            merged = merge_crd(installed["spec"], crd["spec"])
+            if merged is None:
                 raise Blocked(
                     "CRDUpgradeUnsupported",
                     "The shared CRD change is not additive. Review an explicit bootstrap upgrade across every watched namespace.",
@@ -596,12 +627,13 @@ class Controller:
             # A resourceVersion precondition prevents concurrent namespace controllers
             # from overwriting each other's shared CRD. Merge patch avoids taking Helm fields.
             # https://kubernetes.io/docs/reference/using-api/api-concepts/#patch-operations
-            self.kube.request(
-                "PATCH",
-                path,
-                json={"metadata": {"resourceVersion": installed["metadata"]["resourceVersion"]}, "spec": crd["spec"]},
-                headers={"Content-Type": "application/merge-patch+json"},
-            )
+            if merged != installed["spec"]:
+                self.kube.request(
+                    "PATCH",
+                    path,
+                    json={"metadata": {"resourceVersion": installed["metadata"]["resourceVersion"]}, "spec": merged},
+                    headers={"Content-Type": "application/merge-patch+json"},
+                )
         self.kube.patch(
             "Deployment",
             self.system_namespace,
@@ -630,8 +662,9 @@ class Controller:
         job = self.kube.get("Job", self.namespace, document["metadata"]["name"])
         if job is None:
             self.kube.apply(document)
-        accepted = bool(job and job.get("status", {}).get("succeeded", 0))
-        terminal = bool(job and (accepted or job.get("status", {}).get("failed", 0)))
+        outcome = job_outcome(job)
+        accepted = outcome == "Complete"
+        terminal = outcome is not None
         if terminal:
             next_check = status.get("acceptanceNextCheck")
             if next_check is None:

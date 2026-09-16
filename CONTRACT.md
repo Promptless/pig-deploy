@@ -39,8 +39,8 @@ and, for private repositories, `repository-token`. The PostgreSQL DSN must use
 share the same ServiceAccount, native workload identity, labels, and CA mount.
 Set `spec.nodeSelector` to restrict both to nodes configured for that identity.
 Secrets, CA, and ServiceAccount revisions trigger revalidation and analyzer
-restart, including while release updates are paused. PIG never edits these
-customer-owned objects.
+restart, including while release updates are paused. A pending schema transition
+can defer this restart as described below. PIG never edits these customer-owned objects.
 
 S3, Azure Blob, and GCS use their native SDK credential chains, including workload
 identity token refresh. Storage federation does not configure model access.
@@ -55,6 +55,12 @@ including major versions. `pinnedVersion` selects an exact published version;
 `paused` halts release transitions at a safe checkpoint. An active migration is
 allowed to finish before pause takes effect. A pause before the first install
 blocks installation.
+
+Before the migration checkpoint, pausing cancels a pending upgrade and keeps the
+installed release available for configuration rotation, including without catalog
+access. After that checkpoint, resume the transition before rotating configuration;
+the old analyzer may no longer be compatible with the database. This restriction
+also applies to older in-progress status that lacks a recorded migration boundary.
 
 The supervisor records progress in CR status through preflight, quiesce,
 migration, analyzer rollout, verification, and supervisor rollout. It scales the

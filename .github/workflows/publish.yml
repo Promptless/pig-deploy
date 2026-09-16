@@ -114,17 +114,8 @@ jobs:
           sha256sum --check SHA256SUMS
       - name: Open an immutable catalog promotion draft
         run: |
-          git switch -c "release/catalog-$VERSION" origin/main
+          # Promotion tooling comes from reviewed main, even when retrying an older accepted source.
+          git switch --detach origin/main
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          mkdir -p catalog/releases
-          cp "$RELEASE_OUTPUT/release.json" "catalog/releases/$VERSION.json"
-          git add "catalog/releases/$VERSION.json"
-          git commit -m "Add immutable manifest for PIG $VERSION"
-          manifest_commit="$(git rev-parse HEAD)"
-          uv run pig-release promote --version "$VERSION" --manifest "catalog/releases/$VERSION.json" --manifest-commit "$manifest_commit"
-          git add catalog/stable.json
-          git commit -m "Select PIG $VERSION in the stable catalog"
-          git push -u origin "release/catalog-$VERSION"
-          printf 'Promote the accepted PIG %s release. Both runtime images, chart packages, and source archive passed anonymous access checks. Three-cloud acceptance evidence is in releases/acceptance/%s.json. Merging this catalog entry makes the release eligible for automatic updates, including major upgrades.\n' "$VERSION" "$VERSION" > "$RELEASE_OUTPUT/pr.md"
-          gh pr create --draft --base main --head "release/catalog-$VERSION" --title "Promote PIG $VERSION to stable" --body-file "$RELEASE_OUTPUT/pr.md"
+          uv run pig-release promote-draft --version "$VERSION" --manifest "$RELEASE_OUTPUT/release.json"

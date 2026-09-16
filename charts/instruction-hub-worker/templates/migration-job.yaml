@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "instruction-hub-worker.fullname" . }}-migrate
+  name: {{ include "instruction-hub-worker.fullname" . | trunc 55 | trimSuffix "-" }}-migrate
   labels:
     {{- include "instruction-hub-worker.labels" . | nindent 4 }}
     {{- include "instruction-hub-worker.datadogLabels" . | nindent 4 }}

@@ -25,7 +25,7 @@ def worker_values() -> dict[str, object]:
     }
 
 
-def render(chart, values, tmp_path):
+def render(chart, values, tmp_path, release="acme"):
     path = tmp_path / "values.yaml"
     path.write_text(yaml.safe_dump(values))
     subprocess.run(
@@ -35,7 +35,7 @@ def render(chart, values, tmp_path):
         [
             "helm",
             "template",
-            "acme",
+            release,
             str(ROOT / "charts" / chart),
             "--namespace",
             "pig-system",
@@ -48,6 +48,21 @@ def render(chart, values, tmp_path):
         text=True,
     )
     return list(yaml.safe_load_all(output.stdout))
+
+
+@pytest.mark.parametrize(
+    "release,override",
+    [("acme", None), ("customer-production-us-east-2-pig", None), ("a" * 53, None), ("acme", "x" * 54 + "-suffix")],
+)
+def test_migration_job_name_reserves_room_for_suffix(worker_values, tmp_path, release, override):
+    if override:
+        worker_values["fullnameOverride"] = override
+    docs = render("instruction-hub-worker", worker_values, tmp_path, release)
+    job = next(doc for doc in docs if doc["kind"] == "Job")
+    deployment = next(doc for doc in docs if doc["kind"] == "Deployment")
+    name = job["metadata"]["name"]
+    assert name == deployment["metadata"]["name"][:55].rstrip("-") + "-migrate"
+    assert len(name) <= 63
 
 
 @pytest.mark.parametrize(

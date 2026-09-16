@@ -20,6 +20,10 @@ run "private_native_contract" {
     error_message = "Blob access must be private workload identity."
   }
   assert {
+    condition     = azurerm_storage_account.traces.network_rules[0].default_action == "Deny" && azurerm_storage_account.traces.network_rules[0].bypass == toset(["None"])
+    error_message = "Storage firewall must deny unmatched traffic without service bypasses."
+  }
+  assert {
     condition     = azurerm_federated_identity_credential.analyzer.subject == "system:serviceaccount:pig:pig-analyzer"
     error_message = "Federation must bind the customer ServiceAccount."
   }

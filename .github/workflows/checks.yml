@@ -5,9 +5,13 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: deployment-contracts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   contracts:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
@@ -39,7 +43,9 @@ jobs:
           test "$(docker run --rm pig-supervisor:test --version)" = "0.3.0"
   terraform:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
         cloud: [aws, azure, gcp]
     steps:
@@ -47,6 +53,17 @@ jobs:
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: 1.11.4
+      - uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4
+        with:
+          tflint_version: v0.64.0
+      - name: Lint module and example with cloud provider rules
+        env:
+          CLOUD: ${{ matrix.cloud }}
+        run: |
+          config="$GITHUB_WORKSPACE/.github/tflint/$CLOUD.hcl"
+          tflint --init --config "$config"
+          tflint --chdir="modules/$CLOUD" --config "$config"
+          tflint --chdir="examples/$CLOUD" --config "$config"
       - run: terraform fmt -check -recursive
       - name: Validate the checked-out example
         working-directory: examples/${{ matrix.cloud }}

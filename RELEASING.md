@@ -103,11 +103,13 @@ The automated suite covers native chart rendering, CRD admission, scope-limited
 RBAC, fake-API restart/retry behavior, recovery/capacity binding, credential
 rotation, immutable catalog selection, publication integrity, and mock cloud
 plans. The private worker suite covers adapters, persisted native locations,
-migration compatibility, and bounded maintenance failures.
+migration compatibility, and bounded maintenance failures. The credential-free
+[Kubernetes CI suite](CI.md) also exercises real Helm install/upgrade, process
+handoff, admission, status conflicts, SSA, and RBAC in disposable kind clusters.
 
 Remaining release gates are real three-cloud installation/update/recovery
-acceptance, cloud SDK token refresh under real federation, real controller leader
-handoff and Kubernetes admission/SSA behavior, PostgreSQL certificate/network
+acceptance, cloud SDK token refresh under real federation, supervisor self-update
+and recovery with the real analyzer, PostgreSQL certificate/network
 validation, both runtime images and charts anonymously pullable, and full host
 pipeline/Dashboard evidence. A Docker build runs in pull-request CI; local
 validation does not depend on a working Docker daemon.

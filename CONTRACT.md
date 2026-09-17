@@ -149,7 +149,7 @@ Dashboard during installation acceptance.
 
 ## Manual chart
 
-The [manual chart](charts/instruction-hub-worker/README.md) is for operator-managed
+The [manual chart](charts/pig-trace-analyzer/README.md) is for operator-managed
 releases. Its pre-upgrade migration hook requires the operator to quiesce the
 existing analyzer before upgrading.
 It does not enforce the supervisor's release confirmation ConfigMap. Supply a

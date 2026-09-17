@@ -98,6 +98,11 @@ Otherwise choose a compatible forward repair release. A running migration cannot
 be replaced by a repair release until it terminates. Database or object recovery
 is an operator action, never an automatic destructive restore.
 
+The 0.3.0 release targets schema revision 2, which preserves trace data while
+removing the duplicate location column and synchronization objects. Its
+`destructiveMigration: false` declaration does not permit restarting schema-1
+images. Use a schema-2-compatible image or forward repair after migration.
+
 ## Release-specific confirmation
 
 Set `spec.release.confirmation.configMapRef` to a customer-owned ConfigMap in the

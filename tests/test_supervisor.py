@@ -4,6 +4,7 @@ import json
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from pathlib import Path
 from time import monotonic
 
 import httpx
@@ -19,6 +20,9 @@ from pydantic import ValidationError
 NOW = datetime(2026, 9, 15, tzinfo=UTC)
 ROOT = "https://raw.githubusercontent.com/Promptless/pig-deploy/" + "e" * 40
 CATALOG = "https://raw.githubusercontent.com/Promptless/pig-deploy/main/catalog/stable.json"
+CANDIDATE_REQUIREMENTS = json.loads(
+    (Path(__file__).resolve().parents[1] / "releases/requirements/0.3.0.json").read_text()
+)
 
 
 def manifest(version="1.0.0", **requirements):
@@ -628,9 +632,10 @@ def test_forward_repair_can_replace_a_failed_target_at_safe_checkpoint():
     assert document["status"]["currentVersion"] == "1.0.1"
 
 
-def test_paused_secret_rotation_finishes_offline_without_repeating_migration():
+@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-2-candidate"])
+def test_paused_secret_rotation_finishes_offline_without_repeating_migration(requirements):
     kube, document = FakeKube(), deployment()
-    with client_for(manifest()) as client:
+    with client_for(manifest(**requirements)) as client:
         reconcile_to_ready(kube, document, client)
     previous = document["status"]["configurationHash"]
     migrations_before = [
@@ -1105,11 +1110,12 @@ def test_terminal_migration_waits_for_terminating_pods(action, outcome):
             assert kube.applied[-1]["metadata"]["name"] != job["metadata"]["name"]
 
 
-def test_quiesce_waits_for_terminating_analyzer_pods_and_resumes_with_apply() -> None:
+@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-2-candidate"])
+def test_quiesce_waits_for_terminating_analyzer_pods_and_resumes_with_apply(requirements) -> None:
     kube, document = FakeKube(), deployment()
     with client_for(manifest()) as client:
         reconcile_to_ready(kube, document, client)
-    with client_for(manifest(), manifest("2.0.0")) as client:
+    with client_for(manifest(), manifest("2.0.0", **requirements)) as client:
         controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
         for _ in range(12):
             controller.reconcile(document, 1, NOW)
@@ -1140,6 +1146,16 @@ def test_quiesce_waits_for_terminating_analyzer_pods_and_resumes_with_apply() ->
         kube.pods[0]["status"]["phase"] = "Succeeded"
         controller.reconcile(document, 1, NOW)
         assert document["status"]["phase"] == "migration"
+        controller.reconcile(document, 1, NOW)
+        migration = kube.applied[-1]
+        container = migration["spec"]["template"]["spec"]["containers"][0]
+        assert container["args"] == ["supervised-migrate"]
+        passed_requirements = json.loads(next(v["value"] for v in container["env"] if v["name"] == "PIG_REQUIREMENTS"))
+        assert passed_requirements["schemaFrom"] == [0, 1]
+        assert passed_requirements["schemaTo"] == requirements.get("schemaTo", 1)
+        controller.reconcile(document, 1, NOW)
+        assert document["status"]["phase"] == "migration"
+        assert kube.get("Deployment", "pig", "acme-analyzer")["spec"]["replicas"] == 0
         for _ in range(24):
             controller.reconcile(document, 1, NOW)
             kube.finish_jobs()

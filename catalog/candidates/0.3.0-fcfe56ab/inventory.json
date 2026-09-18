@@ -9,5 +9,26 @@
   "identityVerifiedAt": "2026-09-18T23:14:39.658605+00:00",
   "anonymousManifestsVerified": true,
   "supervisorRevisionLabelVerified": true,
-  "canonicalAcceptanceComplete": false
+  "canonicalAcceptanceComplete": false,
+  "clusterImagePullVerified": true,
+  "supervisorVersionVerified": "0.3.0",
+  "analyzerCapabilities": {
+    "capabilities": [
+      "native-storage-v1",
+      "migration-ledger-v1"
+    ],
+    "commands": [
+      "preflight",
+      "supervised-migrate",
+      "verify",
+      "acceptance"
+    ],
+    "controllerProtocol": 1,
+    "schemaRevision": 2,
+    "storageBackends": [
+      "s3",
+      "azureBlob",
+      "gcs"
+    ]
+  }
 }

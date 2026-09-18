@@ -37,6 +37,14 @@ output supplies PostgreSQL metadata, exactly one native storage block,
 `service_account_annotations`, and `pod_labels`. It contains no credential values.
 Copy only those relevant fields into customer-owned Kubernetes configuration.
 
+Configure HTTPS for `endpoint.hostname` through the externally managed ingress
+controller. Set `endpoint.tlsSecretName` when the controller reads a Kubernetes
+TLS Secret. Omit it when the controller uses a certificate configured through
+`endpoint.ingressAnnotations` or its own configuration, such as AWS ALB with ACM.
+The generated Ingress retains the TLS hostname without a Secret reference. The
+operator must provide a valid certificate and an HTTPS listener before enrolling
+hosts; the supervisor does not provision certificates or an ingress controller.
+
 Deliver `pig-credentials` with `install-token`, `postgres-dsn`, `model-api-key`,
 and, for private repositories, `repository-token`. The PostgreSQL DSN must use
 `sslmode=verify-full`. `storage.postgres.caConfigMapRef` mounts its selected key at

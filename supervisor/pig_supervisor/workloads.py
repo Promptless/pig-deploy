@@ -152,6 +152,9 @@ def analyzer_resources(deployment: dict, spec: DeploymentSpec, release: Release,
     name = deployment["metadata"]["name"] + "-analyzer"
     labels = {"app.kubernetes.io/name": name, "app.kubernetes.io/component": "analyzer"}
     template = pod_template(spec, release, config_hash, deployment["metadata"]["name"])
+    tls: dict[str, object] = {"hosts": [spec.endpoint.hostname]}
+    if spec.endpoint.tls_secret_name is not None:
+        tls["secretName"] = spec.endpoint.tls_secret_name
     return [
         {
             "apiVersion": "apps/v1",
@@ -176,7 +179,7 @@ def analyzer_resources(deployment: dict, spec: DeploymentSpec, release: Release,
             "metadata": {**metadata(deployment, name), "annotations": spec.endpoint.ingress_annotations},
             "spec": {
                 "ingressClassName": spec.endpoint.ingress_class_name,
-                "tls": [{"hosts": [spec.endpoint.hostname], "secretName": spec.endpoint.tls_secret_name}],
+                "tls": [tls],
                 "rules": [
                     {
                         "host": spec.endpoint.hostname,

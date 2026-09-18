@@ -74,7 +74,7 @@ class Hosted(Contract):
 class Endpoint(Contract):
     hostname: str = Field(pattern=r"^[a-zA-Z0-9.-]+$")
     ingress_class_name: str
-    tls_secret_name: Name
+    tls_secret_name: Name | None = None
     ingress_annotations: dict[str, str] = Field(default_factory=dict)
 
 

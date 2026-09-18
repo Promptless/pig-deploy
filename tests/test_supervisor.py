@@ -248,6 +248,31 @@ def test_install_is_restartable_and_ready_is_distinct_from_acceptance():
         assert {r["kind"] for r in kube.applied} == {"Deployment", "Service", "Ingress", "Job"}
 
 
+@pytest.mark.parametrize("tls_secret_name", ["pig-tls", None])
+def test_ingress_supports_secret_and_controller_managed_certificates(tls_secret_name):
+    document = deployment()
+    endpoint = document["spec"]["endpoint"]
+    if tls_secret_name is None:
+        endpoint.pop("tlsSecretName")
+        endpoint["ingressClassName"] = "alb"
+        endpoint["ingressAnnotations"] = {
+            "alb.ingress.kubernetes.io/certificate-arn": "arn:aws:acm:us-east-2:123456789012:certificate/example",
+            "alb.ingress.kubernetes.io/listen-ports": '[{"HTTPS":443}]',
+        }
+    kube = FakeKube()
+    with client_for(manifest()) as client:
+        reconcile_to_ready(kube, document, client)
+    ingress = kube.get("Ingress", "pig", "acme-analyzer")
+    tls = ingress["spec"]["tls"][0]
+    assert tls["hosts"] == [endpoint["hostname"]]
+    if tls_secret_name is None:
+        assert "secretName" not in tls
+        assert ingress["metadata"]["annotations"] == endpoint["ingressAnnotations"]
+        assert ingress["spec"]["ingressClassName"] == "alb"
+    else:
+        assert tls["secretName"] == tls_secret_name
+
+
 def test_failed_preflight_retries_and_resumes_after_external_fix():
     kube, document = FakeKube(), deployment()
     with client_for(manifest()) as client:

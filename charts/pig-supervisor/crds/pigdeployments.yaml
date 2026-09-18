@@ -102,6 +102,7 @@ spec:
                     minLength: 1
                     pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                     type: string
+                    nullable: true
                   ingressAnnotations:
                     additionalProperties:
                       type: string
@@ -109,7 +110,6 @@ spec:
                 required:
                 - hostname
                 - ingressClassName
-                - tlsSecretName
                 type: object
               storage:
                 properties:

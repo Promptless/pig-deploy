@@ -24,3 +24,28 @@ Use the current RDS regional/root CA bundle in your customer CA ConfigMap. Build
 the DSN with the output hostname and `sslmode=verify-full`. AWS state uses the
 existing encrypted S3 backend with `use_lockfile=true`; operators need lock-object
 permissions as well as state access. Backend and application KMS keys are separate.
+
+## HTTPS through an Application Load Balancer
+
+Install the [AWS Load Balancer Controller](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/deploy/installation/)
+with its own IAM role, and provision an ACM certificate for the analyzer hostname
+in the ALB's region. These are external prerequisites; this Terraform module does
+not provision them. For the supervisor installation, replace `spec.endpoint` in
+[the deployment example](../pig-deployment.yaml) with:
+
+```yaml
+endpoint:
+  hostname: pig.example.com
+  ingressClassName: alb
+  ingressAnnotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: REPLACE_ACM_CERTIFICATE_ARN
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+```
+
+Omit `tlsSecretName`: ALB terminates TLS using the ACM certificate. Choose an
+internal scheme if all enrolled hosts can reach the private endpoint. Point the
+hostname's DNS record at the provisioned ALB after its targets are healthy, then
+verify HTTPS with the hostname before enrolling a host.

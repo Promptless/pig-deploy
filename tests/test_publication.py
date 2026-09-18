@@ -32,7 +32,7 @@ def evidence_data(commit="a" * 40):
     data = {
         "version": "0.3.0",
         "sourceCommit": commit,
-        "analyzerImage": "ghcr.io/promptless/instruction-hub-worker@sha256:" + "a" * 64,
+        "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:" + "a" * 64,
         "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:" + "b" * 64,
         "requirementsDigest": canonical_digest(requirements.model_dump(by_alias=True)),
         **{
@@ -116,7 +116,7 @@ def test_real_helm_package_immutable_manifest_and_catalog(tmp_path):
     data, requirements = evidence_data(commit)
     evidence = validate_evidence(data, "0.3.0", NOW)
     hashes = package(root, output, evidence, requirements)
-    assert set(hashes) == {"pig-supervisor-0.3.0.tgz", "instruction-hub-worker-0.3.0.tgz", "pig-deploy-0.3.0.tar.gz"}
+    assert set(hashes) == {"pig-supervisor-0.3.0.tgz", "pig-trace-analyzer-0.3.0.tgz", "pig-deploy-0.3.0.tar.gz"}
     (root / "charts/pig-supervisor/untracked-secret").write_text("must never be packaged")
     assert package(root, tmp_path / "repeated", evidence, requirements) == hashes
     with tarfile.open(output / "pig-supervisor-0.3.0.tgz") as archive:
@@ -138,7 +138,7 @@ def test_real_helm_package_immutable_manifest_and_catalog(tmp_path):
 
     release = assemble(root, output, evidence, requirements, Published())
     assert chart_publication_needed(Published(), output, "0.3.0") == dict.fromkeys(
-        ("pig-supervisor", "instruction-hub-worker"), False
+        ("pig-supervisor", "pig-trace-analyzer"), False
     )
     (output / "pig-supervisor-0.3.0.tgz").write_bytes(b"different package")
     with pytest.raises(ValueError, match="cannot be overwritten"):

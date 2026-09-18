@@ -1,7 +1,7 @@
 # Publication sets image.digest to the verified worker artifact.
 replicaCount: 1
 image:
-  repository: ghcr.io/promptless/instruction-hub-worker
+  repository: ghcr.io/promptless/pig-trace-analyzer
   pullPolicy: IfNotPresent
   digest: ''
 service:
@@ -12,7 +12,7 @@ observability:
   datadog:
     enabled: false
     env: local
-    service: instruction-hub-worker
+    service: pig-trace-analyzer
     agentUrl: http://datadog-agent.datadog:8126
     site: datadoghq.com
   sentry:
@@ -29,7 +29,7 @@ gateway:
   className: ''
   annotations: {}
   hosts:
-  - host: instruction-hub-worker.example.com
+  - host: pig-trace-analyzer.example.com
   paths:
   - path: /healthz
     pathType: Exact
@@ -46,7 +46,7 @@ gateway:
   tls: []
 instructionHub:
   runtimeBaseUrl: ''
-  deploymentName: instruction-hub-worker
+  deploymentName: pig-trace-analyzer
   deploymentInstanceId: ''
   configHash: ''
   storageBackend: postgres_s3

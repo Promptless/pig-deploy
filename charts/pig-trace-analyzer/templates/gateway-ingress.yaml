@@ -2,9 +2,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "instruction-hub-worker.fullname" . }}
+  name: {{ include "pig-trace-analyzer.fullname" . }}
   labels:
-    {{- include "instruction-hub-worker.labels" . | nindent 4 }}
+    {{- include "pig-trace-analyzer.labels" . | nindent 4 }}
   {{- with .Values.gateway.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -27,7 +27,7 @@ spec:
             pathType: {{ default "Prefix" .pathType | quote }}
             backend:
               service:
-                name: {{ include "instruction-hub-worker.fullname" $ }}
+                name: {{ include "pig-trace-analyzer.fullname" $ }}
                 port:
                   name: {{ default "http" .servicePortName | quote }}
           {{- end }}

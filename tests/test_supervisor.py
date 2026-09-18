@@ -28,7 +28,7 @@ CANDIDATE_REQUIREMENTS = json.loads(
 def manifest(version="1.0.0", **requirements):
     return {
         "version": version,
-        "analyzerImage": "ghcr.io/promptless/instruction-hub-worker@sha256:" + "a" * 64,
+        "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:" + "a" * 64,
         "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:" + "b" * 64,
         "requirements": {
             "storageBackends": ["s3", "azureBlob", "gcs"],

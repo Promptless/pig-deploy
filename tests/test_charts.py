@@ -57,7 +57,7 @@ def render(chart, values, tmp_path, release="acme"):
 def test_migration_job_name_reserves_room_for_suffix(worker_values, tmp_path, release, override):
     if override:
         worker_values["fullnameOverride"] = override
-    docs = render("instruction-hub-worker", worker_values, tmp_path, release)
+    docs = render("pig-trace-analyzer", worker_values, tmp_path, release)
     job = next(doc for doc in docs if doc["kind"] == "Job")
     deployment = next(doc for doc in docs if doc["kind"] == "Deployment")
     name = job["metadata"]["name"]
@@ -82,7 +82,7 @@ def test_migration_job_name_reserves_room_for_suffix(worker_values, tmp_path, re
 )
 def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_path):
     docs = render(
-        "instruction-hub-worker",
+        "pig-trace-analyzer",
         {
             "image": {"digest": DIGEST},
             "serviceAccount": {"create": False, "name": "pig-analyzer"},
@@ -124,7 +124,7 @@ def test_manual_default_migration_uses_preexisting_shared_account(
     worker_values: dict[str, object], tmp_path: Path
 ) -> None:
     """Pre-install migration must use the same external identity as the analyzer."""
-    docs = render("instruction-hub-worker", worker_values, tmp_path)
+    docs = render("pig-trace-analyzer", worker_values, tmp_path)
 
     assert not any(doc["kind"] == "ServiceAccount" for doc in docs)
     workloads = [doc for doc in docs if doc["kind"] in {"Deployment", "Job"}]
@@ -141,7 +141,7 @@ def test_manual_rejects_chart_created_identity_before_migration(
     worker_values["serviceAccount"] = {"create": True, "name": "pig-analyzer"}
 
     with pytest.raises(subprocess.CalledProcessError) as error:
-        render("instruction-hub-worker", worker_values, tmp_path)
+        render("pig-trace-analyzer", worker_values, tmp_path)
 
     assert "pre-existing shared ServiceAccount" in (error.value.stdout or "") + (error.value.stderr or "")
 
@@ -151,7 +151,7 @@ def test_manual_can_create_identity_with_external_migrations(worker_values: dict
     worker_values["serviceAccount"] = {"create": True, "name": "custom-analyzer"}
     worker_values["migrationJob"] = {"enabled": False}
 
-    docs = render("instruction-hub-worker", worker_values, tmp_path)
+    docs = render("pig-trace-analyzer", worker_values, tmp_path)
 
     assert not any(doc["kind"] == "Job" for doc in docs)
     account = next(doc for doc in docs if doc["kind"] == "ServiceAccount")
@@ -165,7 +165,7 @@ def test_manual_rejects_separate_migration_identity(worker_values: dict[str, obj
     worker_values["migrationJob"] = {"serviceAccountName": "different-account"}
 
     with pytest.raises(subprocess.CalledProcessError):
-        render("instruction-hub-worker", worker_values, tmp_path)
+        render("pig-trace-analyzer", worker_values, tmp_path)
 
 
 def test_supervisor_grants_no_identity_secret_or_rbac_writes(tmp_path):

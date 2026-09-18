@@ -20,7 +20,7 @@ def test_all_workloads_use_customer_node_selector(node_selector: dict[str, str])
     release = Release.model_validate(
         {
             "version": "0.3.0",
-            "analyzerImage": "ghcr.io/promptless/instruction-hub-worker@sha256:" + "a" * 64,
+            "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:" + "a" * 64,
             "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:" + "b" * 64,
             "requirements": {"storageBackends": ["s3", "azureBlob", "gcs"], "schemaFrom": [0], "schemaTo": 1},
         }

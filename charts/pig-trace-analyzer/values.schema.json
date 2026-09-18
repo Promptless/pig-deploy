@@ -336,7 +336,7 @@
       "properties": {
         "repository": {
           "type": "string",
-          "pattern": "^ghcr\\.io/promptless/instruction-hub-worker$"
+          "pattern": "^ghcr\\.io/promptless/pig-trace-analyzer$"
         },
         "digest": {
           "type": "string",

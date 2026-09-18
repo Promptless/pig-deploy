@@ -40,14 +40,14 @@ available and its reviewed catalog promotion is merged. Do not use the existing
 | `modules/{aws,azure,gcp}` | Cloud resources for an existing cluster and network |
 | `examples/{aws,azure,gcp}` | Locked providers, remote state, and local module references |
 | `charts/pig-supervisor` | One-time bootstrap, CRD, and bounded Kubernetes RBAC |
-| `charts/instruction-hub-worker` | Operator-managed analyzer installation |
+| `charts/pig-trace-analyzer` | Operator-managed analyzer installation |
 | `supervisor/pig_supervisor` | Reconciliation, release verification, and publication tools |
 | `catalog` | Immutable manifests and the stable release index |
 | `releases/requirements` | Reviewed live checks and operator prerequisites |
 | `schemas` | Generated CR, release, and acceptance-evidence schemas |
 
 Published charts live at `oci://ghcr.io/promptless/charts/pig-supervisor` and
-`oci://ghcr.io/promptless/charts/instruction-hub-worker`. Every packaged chart
+`oci://ghcr.io/promptless/charts/pig-trace-analyzer`. Every packaged chart
 contains an immutable image digest. Source charts require an explicit digest.
 
 ## Local validation

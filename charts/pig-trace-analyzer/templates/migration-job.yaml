@@ -2,10 +2,10 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "instruction-hub-worker.fullname" . | trunc 55 | trimSuffix "-" }}-migrate
+  name: {{ include "pig-trace-analyzer.fullname" . | trunc 55 | trimSuffix "-" }}-migrate
   labels:
-    {{- include "instruction-hub-worker.labels" . | nindent 4 }}
-    {{- include "instruction-hub-worker.datadogLabels" . | nindent 4 }}
+    {{- include "pig-trace-analyzer.labels" . | nindent 4 }}
+    {{- include "pig-trace-analyzer.datadogLabels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-5"
@@ -20,16 +20,16 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
         app.kubernetes.io/component: maintenance
-        app.kubernetes.io/name: {{ include "instruction-hub-worker.name" . }}
+        app.kubernetes.io/name: {{ include "pig-trace-analyzer.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
-        {{- include "instruction-hub-worker.datadogLabels" . | nindent 8 }}
+        {{- include "pig-trace-analyzer.datadogLabels" . | nindent 8 }}
       {{- if .Values.observability.datadog.enabled }}
       annotations:
         ad.datadoghq.com/migrate.logs: {{ printf "[{\"source\":\"python\",\"service\":%q}]" .Values.observability.datadog.service | quote }}
       {{- end }}
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ include "instruction-hub-worker.serviceAccountName" . | quote }}
+      serviceAccountName: {{ include "pig-trace-analyzer.serviceAccountName" . | quote }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -43,7 +43,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: migrate
-          image: {{ include "instruction-hub-worker.image" . | quote }}
+          image: {{ include "pig-trace-analyzer.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: ["migrate"]
           securityContext:
@@ -63,26 +63,26 @@ spec:
               value: {{ .Chart.Version | quote }}
             - name: INSTRUCTION_HUB_CONFIG_HASH
               value: {{ required "instructionHub.configHash is required" .Values.instructionHub.configHash | quote }}
-            {{- include "instruction-hub-worker.storageEnv" . | nindent 12 }}
+            {{- include "pig-trace-analyzer.storageEnv" . | nindent 12 }}
             - name: INSTRUCTION_HUB_LOG_LEVEL
               value: {{ .Values.instructionHub.logLevel | default "INFO" | quote }}
-            {{- include "instruction-hub-worker.observabilityEnv" . | nindent 12 }}
+            {{- include "pig-trace-analyzer.observabilityEnv" . | nindent 12 }}
             - name: INSTRUCTION_HUB_INSTALL_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "instruction-hub-worker.secretName" . }}
+                  name: {{ include "pig-trace-analyzer.secretName" . }}
                   key: {{ .Values.secrets.installTokenKey }}
             - name: INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "instruction-hub-worker.secretName" . }}
+                  name: {{ include "pig-trace-analyzer.secretName" . }}
                   key: {{ .Values.secrets.customerPostgresDsnKey }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            {{- include "instruction-hub-worker.caMount" . | nindent 12 }}
+            {{- include "pig-trace-analyzer.caMount" . | nindent 12 }}
       volumes:
         - name: tmp
           emptyDir: {}
-        {{- include "instruction-hub-worker.caVolume" . | nindent 8 }}
+        {{- include "pig-trace-analyzer.caVolume" . | nindent 8 }}
 {{- end }}

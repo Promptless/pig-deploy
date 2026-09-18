@@ -104,8 +104,9 @@ resource "aws_db_parameter_group" "postgres" {
   name_prefix = "${var.name}-"
   family      = "postgres${var.postgres_version}"
   parameter {
-    name  = "rds.force_ssl"
-    value = "1"
+    name         = "rds.force_ssl"
+    value        = "1"
+    apply_method = "pending-reboot"
   }
   tags = var.tags
   lifecycle { create_before_destroy = true }

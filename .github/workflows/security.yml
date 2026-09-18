@@ -48,7 +48,7 @@ jobs:
           digest="sha256:$(printf 'a%.0s' {1..64})"
           helm template pig-supervisor charts/pig-supervisor --namespace pig-system --include-crds \
             --set-string "image.digest=$digest" > "$target/supervisor.yaml"
-          helm template pig-analyzer charts/instruction-hub-worker --namespace pig --include-crds \
+          helm template pig-analyzer charts/pig-trace-analyzer --namespace pig --include-crds \
             --set-string "image.digest=$digest" \
             --set-string instructionHub.runtimeBaseUrl=https://runtime.example.com \
             --set-string instructionHub.deploymentInstanceId=ci \

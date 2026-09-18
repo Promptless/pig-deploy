@@ -1,5 +1,5 @@
 apiVersion: v2
-name: instruction-hub-worker
+name: pig-trace-analyzer
 description: Manual PIG analyzer deployment with native cloud object storage
 type: application
 version: 0.3.0

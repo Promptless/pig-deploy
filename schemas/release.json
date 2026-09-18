@@ -25,7 +25,7 @@
       "additionalProperties": false,
       "properties": {
         "repository": {
-          "pattern": "^oci://ghcr\\.io/promptless/charts/(pig-supervisor|instruction-hub-worker)$",
+          "pattern": "^oci://ghcr\\.io/promptless/charts/(pig-supervisor|pig-trace-analyzer)$",
           "title": "Repository",
           "type": "string"
         },

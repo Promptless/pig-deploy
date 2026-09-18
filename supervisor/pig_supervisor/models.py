@@ -211,7 +211,7 @@ class Artifact(Contract):
 
 
 class ChartArtifact(Contract):
-    repository: str = Field(pattern=r"^oci://ghcr\.io/promptless/charts/(pig-supervisor|instruction-hub-worker)$")
+    repository: str = Field(pattern=r"^oci://ghcr\.io/promptless/charts/(pig-supervisor|pig-trace-analyzer)$")
     version: str
     sha256: Digest
     oci_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")

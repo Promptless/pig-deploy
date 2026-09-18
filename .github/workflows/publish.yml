@@ -73,21 +73,21 @@ jobs:
       - name: Publish versioned OCI chart packages
         env:
           PUBLISH_SUPERVISOR: ${{ steps.charts.outputs.pig-supervisor }}
-          PUBLISH_WORKER: ${{ steps.charts.outputs.instruction-hub-worker }}
+          PUBLISH_WORKER: ${{ steps.charts.outputs.pig-trace-analyzer }}
         run: |
           printf '%s' "$GH_TOKEN" | helm registry login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           if test "$PUBLISH_SUPERVISOR" = true; then
             helm push "$RELEASE_OUTPUT/pig-supervisor-$VERSION.tgz" oci://ghcr.io/promptless/charts
           fi
           if test "$PUBLISH_WORKER" = true; then
-            helm push "$RELEASE_OUTPUT/instruction-hub-worker-$VERSION.tgz" oci://ghcr.io/promptless/charts
+            helm push "$RELEASE_OUTPUT/pig-trace-analyzer-$VERSION.tgz" oci://ghcr.io/promptless/charts
           fi
       - name: Require anonymous chart pulls and catalog integrity
         run: |
           HELM_REGISTRY_CONFIG="$(mktemp)"
           export HELM_REGISTRY_CONFIG
           mkdir -p "$RELEASE_OUTPUT/anonymous"
-          for chart in pig-supervisor instruction-hub-worker; do
+          for chart in pig-supervisor pig-trace-analyzer; do
             helm pull "oci://ghcr.io/promptless/charts/$chart" --version "$VERSION" --destination "$RELEASE_OUTPUT/anonymous"
             cmp "$RELEASE_OUTPUT/$chart-$VERSION.tgz" "$RELEASE_OUTPUT/anonymous/$chart-$VERSION.tgz"
           done
@@ -102,11 +102,11 @@ jobs:
           fi
           printf 'Accepted PIG deployment artifacts. Source: %s. Verify SHA256SUMS and catalog manifest digests.\n' "$SOURCE_COMMIT" > "$RELEASE_OUTPUT/notes.md"
           if ! gh release view "v$VERSION" > /dev/null 2>&1; then
-            gh release create "v$VERSION" --verify-tag --title "PIG deployment $VERSION" --notes-file "$RELEASE_OUTPUT/notes.md" "$RELEASE_OUTPUT/pig-deploy-$VERSION.tar.gz" "$RELEASE_OUTPUT/SHA256SUMS" "$RELEASE_OUTPUT/pig-supervisor-$VERSION.tgz" "$RELEASE_OUTPUT/instruction-hub-worker-$VERSION.tgz" "$RELEASE_OUTPUT/release.json"
+            gh release create "v$VERSION" --verify-tag --title "PIG deployment $VERSION" --notes-file "$RELEASE_OUTPUT/notes.md" "$RELEASE_OUTPUT/pig-deploy-$VERSION.tar.gz" "$RELEASE_OUTPUT/SHA256SUMS" "$RELEASE_OUTPUT/pig-supervisor-$VERSION.tgz" "$RELEASE_OUTPUT/pig-trace-analyzer-$VERSION.tgz" "$RELEASE_OUTPUT/release.json"
           fi
       - name: Verify anonymous source archive and release inventory
         run: |
-          for file in "pig-deploy-$VERSION.tar.gz" SHA256SUMS "pig-supervisor-$VERSION.tgz" "instruction-hub-worker-$VERSION.tgz" release.json; do
+          for file in "pig-deploy-$VERSION.tar.gz" SHA256SUMS "pig-supervisor-$VERSION.tgz" "pig-trace-analyzer-$VERSION.tgz" release.json; do
             curl --fail --silent --show-error --location "https://github.com/Promptless/pig-deploy/releases/download/v$VERSION/$file" --output "$RELEASE_OUTPUT/anonymous/$file"
             cmp "$RELEASE_OUTPUT/$file" "$RELEASE_OUTPUT/anonymous/$file"
           done

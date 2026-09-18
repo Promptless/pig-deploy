@@ -23,7 +23,7 @@ from .catalog import canonical_digest
 from .models import Contract, Digest, Image, Release, Requirements, stable_version
 
 REPO = "https://github.com/Promptless/pig-deploy"
-CHARTS = ("pig-supervisor", "instruction-hub-worker")
+CHARTS = ("pig-supervisor", "pig-trace-analyzer")
 CHECKS = frozenset(
     {
         "install",
@@ -72,7 +72,7 @@ def validate_evidence(data: dict, version: str, now: datetime) -> AcceptanceEvid
     evidence = AcceptanceEvidence.model_validate(data)
     if evidence.version != version:
         raise ValueError("evidence version differs from the requested release")
-    if not evidence.analyzer_image.startswith("ghcr.io/promptless/instruction-hub-worker@"):
+    if not evidence.analyzer_image.startswith("ghcr.io/promptless/pig-trace-analyzer@"):
         raise ValueError("analyzer must use the worker image repository")
     if not evidence.supervisor_image.startswith("ghcr.io/promptless/pig-supervisor@"):
         raise ValueError("supervisor must use its own image repository")
@@ -102,7 +102,7 @@ class Registry:
         self.auth = (username, password) if username and password else None
 
     def manifest(self, name: str, reference: str, *, missing_ok: bool = False) -> tuple[str, dict] | None:
-        if not re.fullmatch(r"(charts/)?(pig-supervisor|instruction-hub-worker)", name):
+        if not re.fullmatch(r"(charts/)?(pig-supervisor|pig-trace-analyzer)", name):
             raise ValueError("unexpected registry repository")
         if not re.fullmatch(r"(sha256:[a-f0-9]{64}|[0-9]+\.[0-9]+\.[0-9]+)", reference):
             raise ValueError("expected an immutable digest or canonical release version")
@@ -266,7 +266,7 @@ def assemble(
                     (output / f"pig-deploy-{evidence.version}.tar.gz").read_bytes()
                 ).hexdigest(),
                 "supervisorChart": charts["pig-supervisor"],
-                "workerChart": charts["instruction-hub-worker"],
+                "workerChart": charts["pig-trace-analyzer"],
             },
         }
     )

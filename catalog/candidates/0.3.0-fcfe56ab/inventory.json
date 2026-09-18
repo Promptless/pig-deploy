@@ -1,0 +1,13 @@
+{
+  "version": "0.3.0",
+  "sourceCommit": "fcfe56ab2aa09d4e77b59ec1775802cebb2fbaec",
+  "analyzerSourceCommit": "4ef08b273965100442eebe411bc7778041c7064f",
+  "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:6b87b6189bb79eeca99fa00234bb400514c8367d15cfe6ca6d86b7b8924b74ae",
+  "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:1c636b4fcfa4b3f49fb44433b09c8f6a7e46c0633a37b563b85892b3cfca5bab",
+  "requirementsDigest": "70ffcfd176b9064f4e8379686e19699394234325bf9475d982d175ee535fda48",
+  "candidateWorkflow": "https://github.com/Promptless/pig-deploy/actions/runs/35404807712",
+  "identityVerifiedAt": "2026-09-18T23:14:39.658605+00:00",
+  "anonymousManifestsVerified": true,
+  "supervisorRevisionLabelVerified": true,
+  "canonicalAcceptanceComplete": false
+}

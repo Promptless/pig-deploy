@@ -9,7 +9,8 @@
 
 # PIG deployment
 
-Deploy Promptless Instruction Governance into an existing EKS, AKS, or GKE cluster.
+Deploy Promptless Instruction Governance into an existing EKS cluster. The 0.3.0
+release targets AWS clean installations; Azure/AKS and GCP/GKE support is experimental.
 Terraform provisions the customer database, native object storage, network access,
 workload identity, and recovery settings. A namespace-scoped supervisor installs
 and updates the analyzer from immutable releases.

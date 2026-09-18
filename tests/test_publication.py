@@ -14,6 +14,7 @@ from pig_supervisor.catalog import canonical_digest
 from pig_supervisor.models import Requirements
 from pig_supervisor.publication import (
     CHECKS,
+    INSTALL_CHECKS,
     Registry,
     assemble,
     chart_publication_needed,
@@ -38,9 +39,9 @@ def evidence_data(commit="a" * 40):
         **{
             cloud: {
                 "testedAt": NOW.isoformat(),
-                "evidence": {check: "https://example.com/acceptance/" + check for check in CHECKS},
+                "evidence": {check: "https://example.com/acceptance/" + check for check in INSTALL_CHECKS},
             }
-            for cloud in ("eks", "aks", "gke")
+            for cloud in ("eks",)
         },
     }
     return data, requirements
@@ -53,8 +54,72 @@ def test_evidence_requires_real_cloud_checks_and_exact_artifacts():
         validate_evidence(data, "0.3.1", NOW)
     with pytest.raises(ValueError):
         validate_evidence(data, "0.3.0", NOW + timedelta(days=15))
-    del data["gke"]["evidence"]["recovery"]
+
+
+@pytest.mark.parametrize("check", sorted(INSTALL_CHECKS))
+def test_initial_release_requires_both_install_and_canonical_acceptance(check):
+    data, _ = evidence_data()
+    del data["eks"]["evidence"][check]
+    with pytest.raises(ValueError, match="required checks"):
+        validate_evidence(data, "0.3.0", NOW)
+
+
+def test_initial_release_cannot_omit_aws_or_advertise_untested_rollback():
+    data, _ = evidence_data()
+    aws = data.pop("eks")
     with pytest.raises(ValueError):
+        validate_evidence(data, "0.3.0", NOW)
+    data["eks"] = aws
+    data["rollbackTo"] = ["c" * 64]
+    with pytest.raises(ValueError, match="recovery acceptance"):
+        validate_evidence(data, "0.3.0", NOW)
+    aws["evidence"]["recovery"] = "https://example.com/acceptance/recovery"
+    assert validate_evidence(data, "0.3.0", NOW).rollback_to == ["c" * 64]
+
+
+@pytest.mark.parametrize("version", ["0.3.1", "1.0.0"])
+def test_later_releases_retain_full_three_cloud_lifecycle_gate(version):
+    data, _ = evidence_data()
+    data["version"] = version
+    with pytest.raises(ValueError):
+        validate_evidence(data, version, NOW)
+    for cloud in ("eks", "aks", "gke"):
+        data[cloud] = {
+            "testedAt": NOW.isoformat(),
+            "evidence": {check: "https://example.com/acceptance/" + check for check in CHECKS},
+        }
+    assert validate_evidence(data, version, NOW).version == version
+    for cloud in ("aks", "gke"):
+        report = data.pop(cloud)
+        with pytest.raises(ValueError, match=f"{cloud} acceptance is required"):
+            validate_evidence(data, version, NOW)
+        data[cloud] = None
+        with pytest.raises(ValueError, match=f"{cloud} acceptance is required"):
+            validate_evidence(data, version, NOW)
+        data[cloud] = report
+    del data["gke"]["evidence"]["recovery"]
+    with pytest.raises(ValueError, match="required checks"):
+        validate_evidence(data, version, NOW)
+
+
+@pytest.mark.parametrize("cloud", ["aks", "gke"])
+def test_optional_experimental_cloud_reports_still_require_fresh_complete_evidence(cloud):
+    data, _ = evidence_data()
+    data[cloud] = {"testedAt": (NOW - timedelta(days=15)).isoformat(), "evidence": dict(data["eks"]["evidence"])}
+    with pytest.raises(ValueError, match="fourteen days"):
+        validate_evidence(data, "0.3.0", NOW)
+    data[cloud]["testedAt"] = NOW.isoformat()
+    assert getattr(validate_evidence(data, "0.3.0", NOW), cloud) is not None
+    del data[cloud]["evidence"]["canonicalAcceptance"]
+    with pytest.raises(ValueError, match="required checks"):
+        validate_evidence(data, "0.3.0", NOW)
+
+
+@pytest.mark.parametrize("link", ["http://example.com/report", "https://example.com/private report"])
+def test_acceptance_reports_require_https_links(link):
+    data, _ = evidence_data()
+    data["eks"]["evidence"]["install"] = link
+    with pytest.raises(ValueError, match="public sanitized evidence URL"):
         validate_evidence(data, "0.3.0", NOW)
 
 

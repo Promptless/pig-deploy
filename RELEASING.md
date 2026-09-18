@@ -2,8 +2,10 @@
 
 The first source candidate is 0.3.0. The stable catalog is empty until an accepted
 release is published and its catalog promotion is reviewed. Local tests are not
-installation acceptance. No three-cloud acceptance record is supplied by this
-change, so its publication workflow cannot release an untested candidate.
+installation acceptance. Version 0.3.0 requires a real AWS clean installation and
+canonical pipeline acceptance before publication. Azure and GCP support is
+experimental; their native adapters and deployment modules are not cloud-validated
+by the first release.
 
 ## Artifact and trust boundary
 
@@ -40,16 +42,26 @@ check can pass. No customer secret belongs in this repository or its evidence.
 2. With explicit publication authorization, run the supervisor candidate workflow
    on `main`. Record both image digests and the exact public source commit. The
    supervisor image embeds that commit as its OCI revision and reports its version.
-3. In separately authorized existing EKS, AKS, and GKE test environments, exercise
-   installation and real canonical acceptance; minor and major upgrades; pause
-   and pin; blocked release and automatic resume; Secret rotation; supervisor
-   self-update; and recovery. Test native workload identity refresh and exact
-   database TLS/CA behavior. Use approved recovery points before destructive work.
+3. For 0.3.0, install the exact candidate into a fresh EKS namespace using S3,
+   verified PostgreSQL TLS, native workload identity, and the public supervisor
+   path. Prove enrollment, a canonical object written and readable at its exact
+   native URI, successful analysis of the matching fingerprint, hosted
+   acknowledgement, and the matching trace and analysis in the Dashboard.
+   Zero findings is a successful analysis. An image pull, HTTP 200, healthy Pods,
+   or green CI does not establish this result.
 4. Add `releases/acceptance/VERSION.json` in a reviewed PR. Its shape is generated
    in [schemas/acceptance.json](schemas/acceptance.json). Supply `version`,
    `sourceCommit`, exact `analyzerImage`/`supervisorImage`, `requirementsDigest`,
-   optional `rollbackTo`, and `eks`, `aks`, `gke` records. Each cloud record needs
-   `testedAt` and an `evidence` map with these exact keys:
+   optional `rollbackTo`, and an `eks` record with `testedAt` and an `evidence`
+   map containing `install` and `canonicalAcceptance`.
+
+   For 0.3.0, `aks` and `gke` reports are optional experimental evidence. Any
+   supplied report must cover both checks and meet the same freshness and URL
+   rules. Additional lifecycle checks may be recorded when actually tested.
+   A nonempty `rollbackTo` requires a `recovery` report for every required cloud.
+
+   The AWS installation exception applies only to 0.3.0. Later versions retain
+   the EKS, AKS, and GKE gate with all nine checks until a reviewed policy change:
 
    ```text
    install canonicalAcceptance minorUpdate majorUpdate pausePin
@@ -82,7 +94,7 @@ it does not mean a schema-1 image can run against the resulting database. Recove
 with a schema-2-compatible image or a forward repair. Include a `rollbackTo` entry
 only for a tested recovery path between releases with the same schema revision.
 
-Define upgrade fixtures before cloud acceptance. Each minor or major transition
+Define upgrade fixtures before testing upgrades. Each minor or major transition
 needs immutable source and image identities, a compatible supervisor-capable
 baseline, and a real change to exercise. Relabelling the same image or using an
 incompatible worker does not prove an upgrade.
@@ -117,7 +129,7 @@ Merging makes the release eligible for automatic updates, including
 major versions. Do not squash away or delete the manifest commit referenced by
 its URL. Keep releases, tags, and those commits reachable and protected.
 
-## Release-required engineering acceptance
+## Scope of acceptance
 
 The automated suite covers native chart rendering, CRD admission, scope-limited
 RBAC, fake-API restart/retry behavior, recovery/capacity binding, credential
@@ -127,9 +139,16 @@ migration compatibility, and bounded maintenance failures. The credential-free
 [Kubernetes CI suite](CI.md) also exercises real Helm install/upgrade, process
 handoff, admission, status conflicts, SSA, and RBAC in disposable kind clusters.
 
-Remaining release gates are real three-cloud installation/update/recovery
-acceptance, cloud SDK token refresh under real federation, supervisor self-update
-and recovery with the real analyzer, PostgreSQL certificate/network
-validation, both runtime images and charts anonymously pullable, and full host
-pipeline/Dashboard evidence. A Docker build runs in pull-request CI; local
-validation does not depend on a working Docker daemon.
+For 0.3.0, required live evidence covers a clean AWS installation, verified
+PostgreSQL TLS and S3 access through workload identity, and the full host pipeline
+through Dashboard confirmation. Both runtime images and charts must be anonymously
+pullable, and publication and stable activation still require review of the
+concrete artifacts and evidence.
+
+This first-release gate does not establish minor/major upgrade behavior,
+pause/pin and rotation in a real cloud, interrupted-migration recovery, long-lived
+workload identity refresh, supervisor self-update with the real analyzer, or
+Azure/GCP installation. Preserve those engineering checks for subsequent release
+validation and for promoting experimental cloud support. Define genuine upgrade
+and recovery fixtures before running them; a version-label change is not an upgrade.
+A Docker build runs in pull-request CI; local validation does not require Docker.

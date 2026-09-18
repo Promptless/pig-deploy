@@ -24,6 +24,8 @@ from .models import Contract, Digest, Image, Release, Requirements, stable_versi
 
 REPO = "https://github.com/Promptless/pig-deploy"
 CHARTS = ("pig-supervisor", "pig-trace-analyzer")
+INITIAL_RELEASE = "0.3.0"
+INSTALL_CHECKS = frozenset({"install", "canonicalAcceptance"})
 CHECKS = frozenset(
     {
         "install",
@@ -45,8 +47,8 @@ class CloudAcceptance(Contract):
 
     @model_validator(mode="after")
     def complete(self):
-        if set(self.evidence) != CHECKS:
-            raise ValueError("cloud acceptance must include every required check")
+        if not self.evidence or not set(self.evidence) <= CHECKS:
+            raise ValueError("cloud acceptance must contain only recognized checks")
         if not all(re.fullmatch(r"https://[^\s]+", value) for value in self.evidence.values()):
             raise ValueError("every acceptance check needs a public sanitized evidence URL")
         if self.tested_at.tzinfo is None:
@@ -62,12 +64,30 @@ class AcceptanceEvidence(Contract):
     requirements_digest: Digest
     rollback_to: list[Digest] = Field(default_factory=list)
     eks: CloudAcceptance
-    aks: CloudAcceptance
-    gke: CloudAcceptance
+    aks: CloudAcceptance | None = None
+    gke: CloudAcceptance | None = None
+
+    @model_validator(mode="after")
+    def release_coverage(self):
+        """Scope the first release to AWS installation; retain later lifecycle gates."""
+        initial = self.version == INITIAL_RELEASE
+        required_checks = INSTALL_CHECKS if initial else CHECKS
+        required_clouds = {"eks"} if initial else {"eks", "aks", "gke"}
+        for name in ("eks", "aks", "gke"):
+            cloud = getattr(self, name)
+            if cloud is None:
+                if name in required_clouds:
+                    raise ValueError(f"{name} acceptance is required for this release")
+                continue
+            if not required_checks <= set(cloud.evidence):
+                raise ValueError(f"{name} acceptance is missing required checks")
+            if self.rollback_to and name in required_clouds and "recovery" not in cloud.evidence:
+                raise ValueError("rollback declarations require recovery acceptance")
+        return self
 
 
 def validate_evidence(data: dict, version: str, now: datetime) -> AcceptanceEvidence:
-    """Require recent, exact-artifact evidence for all three real cloud environments."""
+    """Require recent, exact-artifact evidence for the release's cloud coverage."""
     stable_version(version)
     evidence = AcceptanceEvidence.model_validate(data)
     if evidence.version != version:
@@ -77,7 +97,7 @@ def validate_evidence(data: dict, version: str, now: datetime) -> AcceptanceEvid
     if not evidence.supervisor_image.startswith("ghcr.io/promptless/pig-supervisor@"):
         raise ValueError("supervisor must use its own image repository")
     for cloud in (evidence.eks, evidence.aks, evidence.gke):
-        if not now - timedelta(days=14) <= cloud.tested_at <= now:
+        if cloud is not None and not now - timedelta(days=14) <= cloud.tested_at <= now:
             raise ValueError("acceptance evidence must be from the last fourteen days")
     return evidence
 

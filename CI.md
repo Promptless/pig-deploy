@@ -57,7 +57,9 @@ It does not publish an image or require GHCR credentials. The suite checks:
 The Lease expiry timestamp is advanced explicitly in handoff tests to avoid a
 five-minute wait. These checks do not exercise analyzer migrations or prove
 cloud identity, database TLS, trace persistence, analysis, or Dashboard delivery.
-Those remain the separately authorized three-cloud gates in [RELEASING.md](RELEASING.md).
+The 0.3.0 publication gate requires real AWS installation and canonical acceptance;
+Azure and GCP remain experimental. Later versions retain the full three-cloud
+gate described in [RELEASING.md](RELEASING.md).
 
 `uv run pytest -q` skips cluster tests. To run them locally, reproduce the
 cluster/registry setup and image build in

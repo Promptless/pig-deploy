@@ -1,5 +1,8 @@
 # Provision infrastructure for an existing cluster
 
+Version 0.3.0 targets a clean AWS/EKS installation. Azure/AKS and GCP/GKE examples
+are experimental and are not covered by the first release's cloud acceptance.
+
 Choose [AWS](aws/README.md), [Azure](azure/README.md), or [GCP](gcp/README.md).
 Each example uses Terraform 1.11.4 and committed provider locks. Cluster creation,
 state backend creation, DNS/TLS ingress, model endpoints, and Secret delivery

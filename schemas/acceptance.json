@@ -62,10 +62,26 @@
       "$ref": "#/$defs/CloudAcceptance"
     },
     "aks": {
-      "$ref": "#/$defs/CloudAcceptance"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CloudAcceptance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "gke": {
-      "$ref": "#/$defs/CloudAcceptance"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CloudAcceptance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
@@ -74,9 +90,7 @@
     "analyzerImage",
     "supervisorImage",
     "requirementsDigest",
-    "eks",
-    "aks",
-    "gke"
+    "eks"
   ],
   "title": "AcceptanceEvidence",
   "type": "object"

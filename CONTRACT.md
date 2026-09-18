@@ -1,5 +1,14 @@
 # Deployment contract
 
+## Release support
+
+The 0.3.0 release requires a verified clean installation on AWS/EKS and canonical
+pipeline acceptance through the Dashboard. Azure/AKS and GCP/GKE are experimental.
+The lifecycle behavior below is the implementation contract; this first release's
+cloud evidence does not certify upgrades, controller self-update, credential
+rotation, interrupted-migration recovery, or long-lived identity refresh. See
+[release acceptance](RELEASING.md) for the evidence required by each release.
+
 ## Ownership
 
 Terraform owns cloud database, storage, network, IAM, sizing, and backup settings.

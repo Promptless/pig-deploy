@@ -36,9 +36,10 @@ check can pass. No customer secret belongs in this repository or its evidence.
 
 1. Merge reviewed public source and the compatible private analyzer implementation.
    The analyzer's deployment-capabilities command must report controller protocol
-   1, schema revision 3, native `s3`/`azureBlob`/`gcs`, and the `preflight`,
+   1, schema revision 4, native `s3`/`azureBlob`/`gcs`, and the `preflight`,
    `supervised-migrate`, `verify`, and `acceptance` commands. Its capabilities must
-   include `native-storage-v1`, `migration-ledger-v1`, and `installation-identity-v1`.
+   include `native-storage-v1`, `migration-ledger-v1`, `installation-identity-v1`,
+   `alembic-migrations-v1`, and `storage-readiness-v1`.
    The identity capability ensures the analyzer can resolve its installation from
    its credential without an operator-supplied deployment ID.
    Its private image workflow publishes a SHA tag, never a mutable release tag.
@@ -88,7 +89,7 @@ check can pass. No customer secret belongs in this repository or its evidence.
 The 0.3.0 requirements accept starting schema revisions 0–3 and target revision 4.
 The worker also accepts the target revision for retries and configuration rotation.
 The image must advertise `alembic-migrations-v1` and `storage-readiness-v1`.
-Worker CI runs installation and recovery tests on PostgreSQL 15–18 before image
+Worker CI runs installation and recovery tests on PostgreSQL 15–18 before customer GHCR image
 publication. Keep the supervisor's stop, migrate, start sequence.
 
 Alembic adopts known predecessors after checking their history and layout.

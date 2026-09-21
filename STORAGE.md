@@ -35,6 +35,7 @@ GRANT CONNECT ON DATABASE pig TO pig_migrator;
 GRANT CONNECT, TEMPORARY ON DATABASE pig TO pig_app;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO pig_migrator;
+GRANT USAGE ON SCHEMA public TO pig_app;
 ```
 
 Migrations grant the application role data access to worker tables and access
@@ -42,6 +43,15 @@ to the deployment ledger. They do not grant schema ownership or create roles.
 The application uses temporary tables while updating trace lineage. A database
 administrator must retain its `TEMPORARY` permission if public grants are revoked.
 Keep the migration role out of the application role's memberships.
+
+To replace an existing installation's database login with a new application role,
+create the role and grants above before changing the serving Secret. In the current
+worker image, set `INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN` to the new application
+DSN and `INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN` to the existing owner DSN. Run
+`pig-trace-analyzer migrate`, then `pig-trace-analyzer db-status`. At the current
+schema revision, migration applies the grants without changing the schema. After
+both commands succeed, update the deployment's credential references and Secret.
+Configuration and credential rotations do not rerun release migrations.
 
 ## Install and update
 

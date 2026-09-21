@@ -2,8 +2,9 @@
 
 Create a named analyzer installation in Promptless Settings and deliver its
 credential through `secrets.existingSecretName` and `secrets.installTokenKey`.
-The analyzer and migration Job resolve the installation identity from this
-credential. `instructionHub.runtimeBaseUrl` defaults to
+The analyzer resolves its installation identity from this credential. The migration
+Job uses database credentials and needs no hosted connection.
+`instructionHub.runtimeBaseUrl` defaults to
 `https://api.gopromptless.ai`; override it only for another Promptless environment.
 Credential rotation immediately revokes the previous credential. Update the
 external Secret and restart the analyzer with the replacement credential.

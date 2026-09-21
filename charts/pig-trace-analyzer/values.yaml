@@ -45,9 +45,7 @@ gateway:
     servicePortName: http
   tls: []
 instructionHub:
-  runtimeBaseUrl: ''
-  deploymentName: pig-trace-analyzer
-  deploymentInstanceId: ''
+  runtimeBaseUrl: https://api.gopromptless.ai
   configHash: ''
   storageBackend: postgres_s3
   traceObjectS3Bucket: ''

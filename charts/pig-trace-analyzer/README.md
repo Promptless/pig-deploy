@@ -1,5 +1,13 @@
 # Manual analyzer chart
 
+Create a named analyzer installation in Promptless Settings and deliver its
+credential through `secrets.existingSecretName` and `secrets.installTokenKey`.
+The analyzer and migration Job resolve the installation identity from this
+credential. `instructionHub.runtimeBaseUrl` defaults to
+`https://api.gopromptless.ai`; override it only for another Promptless environment.
+Credential rotation immediately revokes the previous credential. Update the
+external Secret and restart the analyzer with the replacement credential.
+
 Create the analyzer ServiceAccount before installing the chart. Apply the cloud
 identity annotations from Terraform's `deployment_configuration` output to that
 account, then set `serviceAccount.name` to its name. The default is

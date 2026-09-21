@@ -16,8 +16,6 @@ def worker_values() -> dict[str, object]:
     return {
         "image": {"digest": DIGEST},
         "instructionHub": {
-            "runtimeBaseUrl": "https://runtime.example.com",
-            "deploymentInstanceId": "test",
             "configHash": "test",
             "traceObjectS3Bucket": "acme-traces",
         },
@@ -89,8 +87,6 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
             "podLabels": {"azure.workload.identity/use": "true"},
             "nodeSelector": {"iam.gke.io/gke-metadata-server-enabled": "true"},
             "instructionHub": {
-                "runtimeBaseUrl": "https://runtime.example.com",
-                "deploymentInstanceId": "test",
                 "configHash": "test",
                 "storageBackend": backend,
                 "postgresCaConfigMapName": "postgres-ca",
@@ -111,6 +107,10 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
         container = template["spec"]["containers"][0]
         env = {e["name"]: e for e in container["env"]}
         assert expected in env
+        assert env["INSTRUCTION_HUB_RUNTIME_BASE_URL"]["value"] == "https://api.gopromptless.ai"
+        assert "INSTRUCTION_HUB_DEPLOYMENT_INSTANCE_ID" not in env
+        assert "INSTRUCTION_HUB_DEPLOYMENT_NAME" not in env
+        assert env["INSTRUCTION_HUB_INSTALL_TOKEN"]["valueFrom"]["secretKeyRef"]["name"] == "pig-credentials"
         assert env["PGSSLROOTCERT"]["value"] == "/etc/pig/postgres-ca/ca.pem"
         assert container["image"].endswith("@" + DIGEST)
         assert any(v["name"] == "postgres-ca" for v in template["spec"]["volumes"])
@@ -118,6 +118,16 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
     assert job["spec"]["template"]["metadata"]["labels"]["app.kubernetes.io/component"] == "maintenance"
     assert deployment["spec"]["strategy"]["type"] == "Recreate"
     assert job["spec"]["backoffLimit"] == 0
+
+
+def test_manual_runtime_override_reaches_analyzer_and_migration(worker_values, tmp_path):
+    worker_values["instructionHub"]["runtimeBaseUrl"] = "https://staging.example.com"
+    docs = render("pig-trace-analyzer", worker_values, tmp_path)
+    for resource in docs:
+        if resource["kind"] not in {"Deployment", "Job"}:
+            continue
+        env = {entry["name"]: entry for entry in resource["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert env["INSTRUCTION_HUB_RUNTIME_BASE_URL"]["value"] == "https://staging.example.com"
 
 
 def test_manual_default_migration_uses_preexisting_shared_account(

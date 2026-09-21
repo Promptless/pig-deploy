@@ -37,7 +37,10 @@ check can pass. No customer secret belongs in this repository or its evidence.
 1. Merge reviewed public source and the compatible private analyzer implementation.
    The analyzer's deployment-capabilities command must report controller protocol
    1, schema revision 2, native `s3`/`azureBlob`/`gcs`, and the `preflight`,
-   `supervised-migrate`, `verify`, and `acceptance` commands.
+   `supervised-migrate`, `verify`, and `acceptance` commands. Its capabilities must
+   include `native-storage-v1`, `migration-ledger-v1`, and `installation-identity-v1`.
+   The identity capability ensures the analyzer can resolve its installation from
+   its credential without an operator-supplied deployment ID.
    Its private image workflow publishes a SHA tag, never a mutable release tag.
 2. With explicit publication authorization, run the supervisor candidate workflow
    on `main`. Record both image digests and the exact public source commit. The

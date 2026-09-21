@@ -201,7 +201,7 @@ def test_chart_install_upgrade_and_process_handoff(deployment):
         NAMESPACE,
         "--type=merge",
         "-p",
-        json.dumps({"spec": {"hosted": {"deploymentID": "after-upgrade"}}}),
+        json.dumps({"spec": {"hosted": {"runtimeURL": "https://staging.example.com"}}}),
     )
     wait_for("the upgraded process to observe the new generation", paused)
     assert read("pigdeployment", "integration")["metadata"]["uid"] == old_uid

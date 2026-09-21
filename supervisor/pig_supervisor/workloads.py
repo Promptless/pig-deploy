@@ -32,8 +32,6 @@ def pod_template(spec: DeploymentSpec, release: Release, config_hash: str, deplo
     model, repository = spec.analysis.model, spec.analysis.repository
     values = {
         "RUNTIME_BASE_URL": spec.hosted.runtime_url,
-        "DEPLOYMENT_NAME": deployment_name,
-        "DEPLOYMENT_INSTANCE_ID": spec.hosted.deployment_id,
         "CONFIG_HASH": config_hash,
         "WORKER_VERSION": release.version,
         "CHART_VERSION": release.version,

@@ -66,10 +66,6 @@ spec:
               value: {{ required "instructionHub.runtimeBaseUrl is required" .Values.instructionHub.runtimeBaseUrl | quote }}
             - name: INSTRUCTION_HUB_PORT
               value: {{ .Values.service.workerPort | int | quote }}
-            - name: INSTRUCTION_HUB_DEPLOYMENT_NAME
-              value: {{ .Values.instructionHub.deploymentName | quote }}
-            - name: INSTRUCTION_HUB_DEPLOYMENT_INSTANCE_ID
-              value: {{ required "instructionHub.deploymentInstanceId is required" .Values.instructionHub.deploymentInstanceId | quote }}
             - name: INSTRUCTION_HUB_CHART_VERSION
               value: {{ .Chart.Version | quote }}
             - name: INSTRUCTION_HUB_CONFIG_HASH

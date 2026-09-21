@@ -19,7 +19,15 @@ from .kube import Kube, KubeError
 from .models import DeploymentSpec, Release, stable_version, validation_details
 from .workloads import analyzer_resources, job_resource, secret_refs
 
-CAPABILITIES = frozenset({"native-storage-v1", "migration-ledger-v1", "controller-self-update-v1", "crd-update-v1"})
+CAPABILITIES = frozenset(
+    {
+        "native-storage-v1",
+        "migration-ledger-v1",
+        "installation-identity-v1",
+        "controller-self-update-v1",
+        "crd-update-v1",
+    }
+)
 PHASES = ("preflight", "quiesce", "migration", "rollout", "verify", "supervisor", "complete")
 
 
@@ -83,7 +91,7 @@ def helm_release_name(release: dict) -> str:
     return name if len(name) <= 53 else name[:40] + "-" + sha256(name.encode()).hexdigest()[:12]
 
 
-def recovery_check(spec: DeploymentSpec, selected: SelectedRelease, document: dict | None, now: datetime) -> None:
+def recovery_check(deployment_uid: str, selected: SelectedRelease, document: dict | None, now: datetime) -> None:
     """Bind a customer confirmation to this installation and exact immutable transition."""
     hours = selected.release.requirements.recovery_max_age_hours
     if hours is None:
@@ -102,7 +110,7 @@ def recovery_check(spec: DeploymentSpec, selected: SelectedRelease, document: di
         or confirmed > now
         or confirmed < now - timedelta(hours=hours)
         or data.get("releaseDigest") != "sha256:" + selected.digest
-        or data.get("deploymentID") != spec.hosted.deployment_id
+        or data.get("deploymentUID") != deployment_uid
         or not data.get("postgresRecoveryPoint")
         or not data.get("objectRecoveryPoint")
     ):
@@ -112,7 +120,7 @@ def recovery_check(spec: DeploymentSpec, selected: SelectedRelease, document: di
         )
 
 
-def capacity_check(spec: DeploymentSpec, selected: SelectedRelease, document: dict | None, now: datetime) -> None:
+def capacity_check(deployment_uid: str, selected: SelectedRelease, document: dict | None, now: datetime) -> None:
     """Require an explicit acknowledgement for capacity that cannot be measured by this controller."""
     requirements = selected.release.requirements.operator_capacity_requirements
     if not requirements:
@@ -130,7 +138,7 @@ def capacity_check(spec: DeploymentSpec, selected: SelectedRelease, document: di
         or confirmed > now
         or confirmed < now - timedelta(hours=selected.release.requirements.capacity_confirmation_max_age_hours)
         or data.get("releaseDigest") != "sha256:" + selected.digest
-        or data.get("deploymentID") != spec.hosted.deployment_id
+        or data.get("deploymentUID") != deployment_uid
         or data.get("capacityRequirementsDigest") != "sha256:" + canonical_digest(requirements)
         or not data.get("capacityEvidence")
     ):
@@ -273,8 +281,8 @@ class Controller:
                         else None
                     )
                     if selected.digest != current_digest:
-                        recovery_check(spec, selected, recovery, now)
-                        capacity_check(spec, selected, recovery, now)
+                        recovery_check(deployment["metadata"]["uid"], selected, recovery, now)
+                        capacity_check(deployment["metadata"]["uid"], selected, recovery, now)
                     if (
                         selected.digest != current_digest
                         and selected.release.requirements.operator_capacity_requirements
@@ -481,8 +489,8 @@ class Controller:
                         if spec.release.confirmation
                         else None
                     )
-                    recovery_check(spec, selected, recovery, now)
-                    capacity_check(spec, selected, recovery, now)
+                    recovery_check(deployment["metadata"]["uid"], selected, recovery, now)
+                    capacity_check(deployment["metadata"]["uid"], selected, recovery, now)
             if not self._job(deployment, spec, selected, config_hash, phase, status, now):
                 return
         elif phase == "quiesce":

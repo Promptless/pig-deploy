@@ -43,8 +43,6 @@ def spec_document():
     return {
         "serviceAccountName": "pig-analyzer",
         "hosted": {
-            "runtimeURL": "https://api.promptless.ai",
-            "deploymentID": "customer-installation",
             "installTokenSecretRef": {"name": "pig-credentials", "key": "install-token"},
         },
         "endpoint": {"hostname": "pig.example.com", "ingressClassName": "nginx", "tlsSecretName": "pig-tls"},
@@ -86,6 +84,31 @@ def deployment():
         },
         "spec": spec_document(),
     }
+
+
+@pytest.mark.parametrize("runtime_url", [None, "https://staging.example.com/"])
+def test_installation_credential_supplies_identity_for_every_workload(runtime_url):
+    document = deployment()
+    if runtime_url is not None:
+        document["spec"]["hosted"]["runtimeURL"] = runtime_url
+    spec = DeploymentSpec.model_validate(document["spec"])
+    release = Release.model_validate(manifest())
+    resources = [analyzer_resources(document, spec, release, "hash")[0]]
+    resources.extend(
+        job_resource(document, spec, release, "a" * 64, "hash", phase, 0)
+        for phase in ("preflight", "migration", "verify", "acceptance")
+    )
+    for resource in resources:
+        env = {entry["name"]: entry for entry in resource["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert env["INSTRUCTION_HUB_RUNTIME_BASE_URL"]["value"] == (
+            runtime_url.rstrip("/") if runtime_url else "https://api.gopromptless.ai"
+        )
+        assert "INSTRUCTION_HUB_DEPLOYMENT_INSTANCE_ID" not in env
+        assert "INSTRUCTION_HUB_DEPLOYMENT_NAME" not in env
+        assert env["INSTRUCTION_HUB_INSTALL_TOKEN"]["valueFrom"]["secretKeyRef"] == {
+            "name": "pig-credentials",
+            "key": "install-token",
+        }
 
 
 def client_for(*documents):
@@ -406,25 +429,25 @@ def test_paused_policy_uses_installed_manifest_without_network():
 
 
 def test_recovery_is_exact_fresh_and_rechecked_after_pause():
-    spec = DeploymentSpec.model_validate(spec_document())
+    deployment_uid = deployment()["metadata"]["uid"]
     selected = SelectedRelease(Release.model_validate(manifest(recoveryMaxAgeHours=24)), "c" * 64)
     data = {
         "releaseDigest": "sha256:" + selected.digest,
-        "deploymentID": spec.hosted.deployment_id,
+        "deploymentUID": deployment_uid,
         "postgresRecoveryPoint": "snapshot-example",
         "objectRecoveryPoint": "version-window-example",
         "confirmedAt": NOW.isoformat(),
     }
-    recovery_check(spec, selected, {"data": data}, NOW)
+    recovery_check(deployment_uid, selected, {"data": data}, NOW)
     for overrides in (
         {"releaseDigest": "d" * 64},
-        {"deploymentID": "another-installation"},
+        {"deploymentUID": "another-installation"},
         {"confirmedAt": (NOW - timedelta(hours=25)).isoformat()},
         {"confirmedAt": (NOW + timedelta(hours=1)).isoformat()},
         {"postgresRecoveryPoint": ""},
     ):
         with pytest.raises(Blocked, match="Refresh"):
-            recovery_check(spec, selected, {"data": {**data, **overrides}}, NOW)
+            recovery_check(deployment_uid, selected, {"data": {**data, **overrides}}, NOW)
 
 
 def test_new_capability_cannot_grant_rbac():
@@ -506,7 +529,7 @@ def test_kubernetes_refuses_adoption():
 
 
 def test_capacity_acknowledgement_binds_release_requirements_and_expires():
-    spec = DeploymentSpec.model_validate(spec_document())
+    deployment_uid = deployment()["metadata"]["uid"]
     selected = SelectedRelease(
         Release.model_validate(
             manifest(operatorCapacityRequirements=["Allow two times the table size for migration."])
@@ -515,27 +538,31 @@ def test_capacity_acknowledgement_binds_release_requirements_and_expires():
     )
     data = {
         "releaseDigest": "sha256:" + selected.digest,
-        "deploymentID": spec.hosted.deployment_id,
+        "deploymentUID": deployment_uid,
         "capacityRequirementsDigest": "sha256:"
         + canonical_digest(selected.release.requirements.operator_capacity_requirements),
         "capacityConfirmedAt": NOW.isoformat(),
         "capacityEvidence": "Operator checked managed database metrics after Terraform change.",
     }
-    capacity_check(spec, selected, {"data": data}, NOW)
+    capacity_check(deployment_uid, selected, {"data": data}, NOW)
     for overrides in (
         {"releaseDigest": "sha256:" + "d" * 64},
+        {"deploymentUID": "replacement-deployment-uid"},
         {"capacityRequirementsDigest": "sha256:" + "d" * 64},
         {"capacityConfirmedAt": (NOW - timedelta(days=2)).isoformat()},
         {"capacityEvidence": ""},
     ):
         with pytest.raises(Blocked):
-            capacity_check(spec, selected, {"data": {**data, **overrides}}, NOW)
+            capacity_check(deployment_uid, selected, {"data": {**data, **overrides}}, NOW)
     with pytest.raises(Blocked):
-        capacity_check(spec, selected, None, NOW)
+        capacity_check(deployment_uid, selected, None, NOW)
     # A recovery confirmation cannot stand in for the separate capacity acknowledgement.
     with pytest.raises(Blocked):
         capacity_check(
-            spec, selected, {"data": {"confirmedAt": NOW.isoformat(), "postgresRecoveryPoint": "snapshot"}}, NOW
+            deployment_uid,
+            selected,
+            {"data": {"confirmedAt": NOW.isoformat(), "postgresRecoveryPoint": "snapshot"}},
+            NOW,
         )
 
 
@@ -550,7 +577,7 @@ def test_confirmation_arrival_resumes_without_a_terraform_inventory():
         kube.documents[("ConfigMap", "pig", "release-confirmation")] = {
             "data": {
                 "releaseDigest": "sha256:" + selected.digest,
-                "deploymentID": "customer-installation",
+                "deploymentUID": document["metadata"]["uid"],
                 "capacityRequirementsDigest": "sha256:"
                 + canonical_digest(selected.release.requirements.operator_capacity_requirements),
                 "capacityConfirmedAt": NOW.isoformat(),
@@ -882,7 +909,7 @@ def test_confirmation_expiry_after_pause_blocks_creation_of_destructive_migratio
         confirmation = {
             "data": {
                 "releaseDigest": "sha256:" + selected.digest,
-                "deploymentID": "customer-installation",
+                "deploymentUID": document["metadata"]["uid"],
                 "postgresRecoveryPoint": "snapshot-example",
                 "objectRecoveryPoint": "version-window-example",
                 "confirmedAt": NOW.isoformat(),

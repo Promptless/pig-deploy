@@ -144,13 +144,8 @@
       "additionalProperties": false,
       "properties": {
         "runtimeURL": {
+          "default": "https://api.gopromptless.ai",
           "title": "Runtimeurl",
-          "type": "string"
-        },
-        "deploymentID": {
-          "maxLength": 200,
-          "minLength": 1,
-          "title": "Deploymentid",
           "type": "string"
         },
         "installTokenSecretRef": {
@@ -158,8 +153,6 @@
         }
       },
       "required": [
-        "runtimeURL",
-        "deploymentID",
         "installTokenSecretRef"
       ],
       "title": "Hosted",

@@ -50,8 +50,6 @@ jobs:
             --set-string "image.digest=$digest" > "$target/supervisor.yaml"
           helm template pig-analyzer charts/pig-trace-analyzer --namespace pig --include-crds \
             --set-string "image.digest=$digest" \
-            --set-string instructionHub.runtimeBaseUrl=https://runtime.example.com \
-            --set-string instructionHub.deploymentInstanceId=ci \
             --set-string instructionHub.configHash=ci \
             --set-string instructionHub.traceObjectS3Bucket=ci-traces \
             --set-string secrets.existingSecretName=pig-credentials > "$target/analyzer.yaml"

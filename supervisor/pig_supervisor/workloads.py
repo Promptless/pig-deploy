@@ -20,6 +20,7 @@ def secret_refs(spec: DeploymentSpec) -> list[SecretRef]:
         for ref in (
             spec.hosted.install_token_secret_ref,
             spec.storage.postgres.dsn_secret_ref,
+            spec.storage.postgres.migration_dsn_secret_ref,
             spec.analysis.model.api_key_secret_ref,
         )
         if ref
@@ -96,7 +97,7 @@ def pod_template(spec: DeploymentSpec, release: Release, config_hash: str, deplo
                 "fsGroup": 10001,
                 "seccompProfile": {"type": "RuntimeDefault"},
             },
-            "terminationGracePeriodSeconds": 60,
+            "terminationGracePeriodSeconds": 120,
             "volumes": volumes,
             "containers": [
                 {
@@ -112,7 +113,20 @@ def pod_template(spec: DeploymentSpec, release: Release, config_hash: str, deplo
                     "resources": {"requests": {"cpu": "500m", "memory": "1Gi"}, "limits": {"memory": "2Gi"}},
                     "ports": [{"name": "http", "containerPort": 8080}],
                     "volumeMounts": mounts,
-                    "readinessProbe": {"httpGet": {"path": "/healthz", "port": "http"}, "periodSeconds": 10},
+                    "readinessProbe": {
+                        "httpGet": {
+                            "path": "/readyz"
+                            if "storage-readiness-v1" in release.requirements.capabilities
+                            else "/healthz",
+                            "port": "http",
+                        },
+                        "periodSeconds": 10,
+                    },
+                    "startupProbe": {
+                        "httpGet": {"path": "/healthz", "port": "http"},
+                        "periodSeconds": 5,
+                        "failureThreshold": 36,
+                    },
                     "livenessProbe": {"httpGet": {"path": "/healthz", "port": "http"}, "initialDelaySeconds": 30},
                 }
             ],
@@ -216,11 +230,15 @@ def job_resource(
     template["spec"]["restartPolicy"] = "Never"
     container = template["spec"]["containers"][0]
     container["args"] = [{"migration": "supervised-migrate"}.get(phase, phase)]
+    if phase in ("preflight", "migration") and spec.storage.postgres.migration_dsn_secret_ref:
+        container["env"].append(
+            env_secret("INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN", spec.storage.postgres.migration_dsn_secret_ref)
+        )
     container["env"] += [
         env_value("PIG_RELEASE_DIGEST", digest),
         env_value("PIG_REQUIREMENTS", release.requirements.model_dump_json(by_alias=True)),
     ]
-    for key in ("ports", "readinessProbe", "livenessProbe"):
+    for key in ("ports", "readinessProbe", "livenessProbe", "startupProbe"):
         container.pop(key)
     return {
         "apiVersion": "batch/v1",

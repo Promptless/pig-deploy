@@ -8,6 +8,13 @@ credential. `instructionHub.runtimeBaseUrl` defaults to
 Credential rotation immediately revokes the previous credential. Update the
 external Secret and restart the analyzer with the replacement credential.
 
+Select instruction repositories in Promptless Settings. Set
+`instructionHub.analysis.activationAt` to enable trace analysis from that time.
+To enable instruction catalog indexing without trace analysis, set
+`instructionHub.analysis.catalogEnabled: true` and leave `activationAt` empty.
+Both modes use `instructionHub.analysis.modelApi` and
+`instructionHub.analysis.mirrorRoot`.
+
 Create the analyzer ServiceAccount before installing the chart. Apply the cloud
 identity annotations from Terraform's `deployment_configuration` output to that
 account, then set `serviceAccount.name` to its name. The default is

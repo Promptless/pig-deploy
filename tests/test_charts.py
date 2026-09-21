@@ -130,6 +130,67 @@ def test_manual_runtime_override_reaches_analyzer_and_migration(worker_values, t
         assert env["INSTRUCTION_HUB_RUNTIME_BASE_URL"]["value"] == "https://staging.example.com"
 
 
+@pytest.mark.parametrize("activation_at", ["", "2026-09-21T00:00:00Z"])
+@pytest.mark.parametrize("authentication", ["api_key", "aws_sigv4"])
+def test_manual_model_access_without_repository_configuration(
+    activation_at: str, authentication: str, tmp_path: Path
+) -> None:
+    """Analysis and catalog-only operation receive model access and writable mirrors."""
+    model = {
+        "provider": "openai" if authentication == "api_key" else "aws_bedrock",
+        "authentication": authentication,
+        "baseUrl": "https://api.openai.com/v1"
+        if authentication == "api_key"
+        else "https://bedrock-mantle.us-east-1.api.aws/v1",
+        "model": "test-model",
+    }
+    docs = render(
+        "pig-trace-analyzer",
+        {
+            "image": {"digest": DIGEST},
+            "instructionHub": {
+                "configHash": "test",
+                "traceObjectS3Bucket": "acme-traces",
+                "analysis": {
+                    "activationAt": activation_at,
+                    "catalogEnabled": not activation_at,
+                    "mirrorRoot": "/var/lib/instruction-hub/custom-mirrors",
+                    "modelApi": model,
+                },
+            },
+            "secrets": {
+                "create": True,
+                "installToken": "test-install-token",
+                "customerPostgresDsn": "test-postgres-dsn",
+                "analysisModelApiKey": "test-model-key" if authentication == "api_key" else "",
+            },
+        },
+        tmp_path,
+    )
+    deployment = next(doc for doc in docs if doc["kind"] == "Deployment")
+    pod = deployment["spec"]["template"]["spec"]
+    container = pod["containers"][0]
+    env = {entry["name"]: entry for entry in container["env"]}
+    assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_NAME"]["value"] == "test-model"
+    assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_AUTHENTICATION"]["value"] == authentication
+    assert env["INSTRUCTION_HUB_ANALYSIS_MIRROR_ROOT"]["value"] == "/var/lib/instruction-hub/custom-mirrors"
+    assert ("INSTRUCTION_HUB_ANALYSIS_ACTIVATION_AT" in env) is bool(activation_at)
+    assert not any(name.startswith("INSTRUCTION_HUB_ANALYSIS_REPOSITORY_") for name in env)
+    assert {"name": "analysis-mirrors", "mountPath": "/var/lib/instruction-hub"} in container["volumeMounts"]
+    assert {"name": "analysis-mirrors", "emptyDir": {}} in pod["volumes"]
+    secret = next(doc for doc in docs if doc["kind"] == "Secret")
+    expected_keys = {"install-token", "customer-postgres-dsn"}
+    if authentication == "api_key":
+        expected_keys.add("analysis-model-api-key")
+        assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY"]["valueFrom"]["secretKeyRef"] == {
+            "name": secret["metadata"]["name"],
+            "key": "analysis-model-api-key",
+        }
+    else:
+        assert "INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY" not in env
+    assert set(secret["stringData"]) == expected_keys
+
+
 def test_manual_default_migration_uses_preexisting_shared_account(
     worker_values: dict[str, object], tmp_path: Path
 ) -> None:

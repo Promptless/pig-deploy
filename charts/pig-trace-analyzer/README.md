@@ -8,6 +8,13 @@ credential. `instructionHub.runtimeBaseUrl` defaults to
 Credential rotation immediately revokes the previous credential. Update the
 external Secret and restart the analyzer with the replacement credential.
 
+Configure `instructionHub.analysis.modelApi` for your model endpoint. With
+`authentication: api_key`, the same Secret must contain `analysis-model-api-key`
+(or the key selected by `secrets.analysisModelApiKeyKey`). Bedrock with
+`authentication: aws_sigv4` uses the analyzer's cloud identity instead. Analysis
+permission and instruction repositories are selected in PIG Settings; Runtime
+provides repository access. The chart needs no repository identity or token.
+
 Create the analyzer ServiceAccount before installing the chart. Apply the cloud
 identity annotations from Terraform's `deployment_configuration` output to that
 account, then set `serviceAccount.name` to its name. The default is

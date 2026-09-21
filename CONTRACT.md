@@ -67,8 +67,11 @@ The generated Ingress retains the TLS hostname without a Secret reference. The
 operator must provide a valid certificate and an HTTPS listener before enrolling
 hosts; the supervisor does not provision certificates or an ingress controller.
 
-Deliver `pig-credentials` with `install-token`, `postgres-dsn`, `model-api-key`,
-and, for private repositories, `repository-token`. The PostgreSQL DSN must use
+Deliver `pig-credentials` with `install-token`, `postgres-dsn`, and `model-api-key`
+when the model uses API-key authentication. Select instruction repositories in PIG
+Settings using the organization's GitHub connection. The analyzer fetches those
+sources and repository access through Runtime; no repository token or repository
+identity belongs in the deployment configuration. The PostgreSQL DSN must use
 `sslmode=verify-full`. `storage.postgres.caConfigMapRef` mounts its selected key at
 `/etc/pig/postgres-ca/ca.pem` and sets `PGSSLROOTCERT`. Analyzer and maintenance Jobs
 share the same ServiceAccount, native workload identity, labels, and CA mount.
@@ -128,10 +131,13 @@ Otherwise choose a compatible forward repair release. A running migration cannot
 be replaced by a repair release until it terminates. Database or object recovery
 is an operator action, never an automatic destructive restore.
 
-The 0.3.0 release targets schema revision 2, which preserves trace data while
-removing the duplicate location column and synchronization objects. Its
-`destructiveMigration: false` declaration does not permit restarting schema-1
-images. Use a schema-2-compatible image or forward repair after migration.
+The 0.3.0 release accepts starting schema revisions 0, 1, and 2 and targets revision
+3. It adds analysis instruction-source provenance and, on older installations,
+removes duplicate location schema objects while preserving trace data. Its
+`destructiveMigration: false` declaration does not permit restarting older
+images: their migration ledger checks reject revision 3. Use a schema-3-compatible
+image or forward repair after migration. Live checks also accept an installation
+already at revision 3 for retries and configuration rotation.
 
 ## Release-specific confirmation
 

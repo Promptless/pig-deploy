@@ -14,15 +14,11 @@
           "title": "Quietwindowhours",
           "type": "number"
         },
-        "repository": {
-          "$ref": "#/$defs/Repository"
-        },
         "model": {
           "$ref": "#/$defs/Model"
         }
       },
       "required": [
-        "repository",
         "model"
       ],
       "title": "Analysis",
@@ -263,44 +259,6 @@
         }
       },
       "title": "ReleasePolicy",
-      "type": "object"
-    },
-    "Repository": {
-      "additionalProperties": false,
-      "properties": {
-        "url": {
-          "pattern": "^https://github\\.com/[^/]+/[^/]+\\.git$",
-          "title": "Url",
-          "type": "string"
-        },
-        "id": {
-          "exclusiveMinimum": 0,
-          "title": "Id",
-          "type": "integer"
-        },
-        "fullName": {
-          "pattern": "^[^/]+/[^/]+$",
-          "title": "Fullname",
-          "type": "string"
-        },
-        "tokenSecretRef": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SecretRef"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        }
-      },
-      "required": [
-        "url",
-        "id",
-        "fullName"
-      ],
-      "title": "Repository",
       "type": "object"
     },
     "S3": {

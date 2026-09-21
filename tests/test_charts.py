@@ -130,6 +130,38 @@ def test_manual_runtime_override_reaches_analyzer_and_migration(worker_values, t
         assert env["INSTRUCTION_HUB_RUNTIME_BASE_URL"]["value"] == "https://staging.example.com"
 
 
+@pytest.mark.parametrize("authentication", ["api_key", "aws_sigv4"])
+def test_manual_analysis_uses_hosted_repositories_without_repository_secrets(worker_values, tmp_path, authentication):
+    worker_values["secrets"] = {
+        "create": True,
+        "installToken": "test-install-token",
+        "customerPostgresDsn": "test-dsn",
+    }
+    if authentication == "api_key":
+        worker_values["secrets"]["analysisModelApiKey"] = "test-model-key"
+    else:
+        worker_values["instructionHub"]["analysis"] = {
+            "modelApi": {
+                "provider": "aws_bedrock",
+                "authentication": authentication,
+                "baseUrl": "https://bedrock-mantle.us-east-1.api.aws/v1",
+                "model": "test-model",
+            }
+        }
+    docs = render("pig-trace-analyzer", worker_values, tmp_path)
+    secret = next(doc for doc in docs if doc["kind"] == "Secret")
+    expected_keys = {"install-token", "customer-postgres-dsn"}
+    if authentication == "api_key":
+        expected_keys.add("analysis-model-api-key")
+    assert set(secret["stringData"]) == expected_keys
+    deployment = next(doc for doc in docs if doc["kind"] == "Deployment")
+    env = {entry["name"]: entry for entry in deployment["spec"]["template"]["spec"]["containers"][0]["env"]}
+    assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_AUTHENTICATION"]["value"] == authentication
+    assert env["INSTRUCTION_HUB_ANALYSIS_MIRROR_ROOT"]["value"] == "/tmp/analysis-mirrors"
+    assert not any(name.startswith("INSTRUCTION_HUB_ANALYSIS_REPOSITORY_") for name in env)
+    assert ("INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY" in env) == (authentication == "api_key")
+
+
 def test_manual_default_migration_uses_preexisting_shared_account(
     worker_values: dict[str, object], tmp_path: Path
 ) -> None:

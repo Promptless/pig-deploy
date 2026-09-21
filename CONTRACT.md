@@ -21,6 +21,8 @@ multiple deployment policies block reconciliation. Separate namespaces can share
 the CRD, so automatic CRD changes must be optional, additive, and within the
 named CRD permissions granted at bootstrap. New capabilities block the release
 until an operator reviews and applies a bootstrap upgrade.
+For changes to required spec fields, follow the
+[operator CRD upgrade procedure](UPGRADING.md).
 
 A contender waits one full Lease duration (five minutes) after first observing
 an existing Lease or observing its latest renewal before taking over. A newly
@@ -67,8 +69,11 @@ The generated Ingress retains the TLS hostname without a Secret reference. The
 operator must provide a valid certificate and an HTTPS listener before enrolling
 hosts; the supervisor does not provision certificates or an ingress controller.
 
-Deliver `pig-credentials` with `install-token`, `postgres-dsn`, `model-api-key`,
-and, for private repositories, `repository-token`. The PostgreSQL DSN must use
+Select instruction repositories in Promptless Settings. The analyzer fetches their
+identities and access credentials from the hosted runtime.
+
+Deliver `pig-credentials` with `install-token` and `postgres-dsn`. Add
+`model-api-key` when the model uses API-key authentication. The PostgreSQL DSN must use
 `sslmode=verify-full`. `storage.postgres.caConfigMapRef` mounts its selected key at
 `/etc/pig/postgres-ca/ca.pem` and sets `PGSSLROOTCERT`. Analyzer and maintenance Jobs
 share the same ServiceAccount, native workload identity, labels, and CA mount.

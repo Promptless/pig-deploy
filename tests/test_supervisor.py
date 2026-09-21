@@ -54,12 +54,6 @@ def spec_document():
             "s3": {"bucket": "example-pig", "prefix": "trace-objects", "region": "us-east-2"},
         },
         "analysis": {
-            "repository": {
-                "url": "https://github.com/example/instructions.git",
-                "id": 42,
-                "fullName": "example/instructions",
-                "tokenSecretRef": {"name": "pig-credentials", "key": "repository-token"},
-            },
             "model": {
                 "provider": "openai",
                 "authentication": "api_key",
@@ -105,6 +99,8 @@ def test_installation_credential_supplies_identity_for_every_workload(runtime_ur
         )
         assert "INSTRUCTION_HUB_DEPLOYMENT_INSTANCE_ID" not in env
         assert "INSTRUCTION_HUB_DEPLOYMENT_NAME" not in env
+        assert not any(name.startswith("INSTRUCTION_HUB_ANALYSIS_REPOSITORY_") for name in env)
+        assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_NAME"]["value"] == "gpt-5"
         assert env["INSTRUCTION_HUB_INSTALL_TOKEN"]["valueFrom"]["secretKeyRef"] == {
             "name": "pig-credentials",
             "key": "install-token",
@@ -135,7 +131,7 @@ class FakeKube:
         self.documents[("ServiceAccount", "pig", "pig-analyzer")] = {"metadata": {"resourceVersion": "1"}}
         self.documents[("Secret", "pig", "pig-credentials")] = {
             "metadata": {"resourceVersion": "1"},
-            "data": {key: "opaque" for key in ("install-token", "postgres-dsn", "model-api-key", "repository-token")},
+            "data": {key: "opaque" for key in ("install-token", "postgres-dsn", "model-api-key")},
         }
         self.documents[("ConfigMap", "pig", "postgres-ca")] = {
             "metadata": {"resourceVersion": "1"},

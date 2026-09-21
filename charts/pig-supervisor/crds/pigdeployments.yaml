@@ -211,39 +211,6 @@ spec:
                     exclusiveMinimum: true
                     type: number
                     minimum: 0
-                  repository:
-                    properties:
-                      url:
-                        pattern: ^https://github\.com/[^/]+/[^/]+\.git$
-                        type: string
-                      id:
-                        exclusiveMinimum: true
-                        type: integer
-                        minimum: 0
-                      fullName:
-                        pattern: ^[^/]+/[^/]+$
-                        type: string
-                      tokenSecretRef:
-                        properties:
-                          name:
-                            maxLength: 63
-                            minLength: 1
-                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                            type: string
-                          key:
-                            minLength: 1
-                            pattern: ^[a-zA-Z0-9._-]+$
-                            type: string
-                        required:
-                        - name
-                        - key
-                        type: object
-                        nullable: true
-                    required:
-                    - url
-                    - id
-                    - fullName
-                    type: object
                   model:
                     properties:
                       provider:
@@ -284,7 +251,6 @@ spec:
                     - name
                     type: object
                 required:
-                - repository
                 - model
                 type: object
             required:

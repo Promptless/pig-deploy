@@ -33,11 +33,6 @@ spec:
   analysis:
     activationAt: "2026-09-15T00:00:00Z" # Set your intended start time.
     quietWindowHours: 0.5
-    repository:
-      url: https://github.com/example/instructions.git
-      id: 123
-      fullName: example/instructions
-      tokenSecretRef: {name: pig-credentials, key: repository-token}
     model:
       provider: openai
       authentication: api_key

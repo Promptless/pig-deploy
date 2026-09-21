@@ -24,6 +24,7 @@ source. Analyzer application source is maintained separately.
   remote state, Terraform ownership, and the Kubernetes handoff.
 - [Deployment contract](CONTRACT.md): release policy, credentials, recovery,
   capacity acknowledgement, and acceptance.
+- [Storage operations](STORAGE.md): database roles, diagnostics, retention, and recovery.
 - [Release operations](RELEASING.md): artifact integrity, publication gates, and
   engineering validation still required before the first release.
 - [Customer guides](https://promptless.ai/docs/governance/deploy-the-worker/plan-your-deployment/).

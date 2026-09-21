@@ -209,6 +209,17 @@
         "dsnSecretRef": {
           "$ref": "#/$defs/SecretRef"
         },
+        "migrationDsnSecretRef": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "caConfigMapRef": {
           "anyOf": [
             {

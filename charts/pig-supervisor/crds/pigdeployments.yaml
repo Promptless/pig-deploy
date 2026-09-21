@@ -124,6 +124,22 @@ spec:
                         - name
                         - key
                         type: object
+                      migrationDsnSecretRef:
+                        properties:
+                          name:
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                          key:
+                            minLength: 1
+                            pattern: ^[a-zA-Z0-9._-]+$
+                            type: string
+                        required:
+                        - name
+                        - key
+                        type: object
+                        nullable: true
                       caConfigMapRef:
                         properties:
                           name:

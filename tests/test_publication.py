@@ -132,18 +132,18 @@ def test_stale_worker_image_cannot_be_relabelled_as_native_release():
 
 @pytest.mark.parametrize("schema_revision", [1, 2, 3, 4])
 @pytest.mark.parametrize("installation_identity", [False, True])
-def test_candidate_requires_schema_3_worker_and_credential_identity(schema_revision, installation_identity):
+def test_candidate_requires_schema_4_worker_and_credential_identity(schema_revision, installation_identity):
     _, requirements = evidence_data()
     capabilities = {
         "controllerProtocol": 1,
         "schemaRevision": schema_revision,
         "storageBackends": ["s3", "azureBlob", "gcs"],
         "commands": ["preflight", "supervised-migrate", "verify", "acceptance"],
-        "capabilities": ["native-storage-v1", "migration-ledger-v1"],
+        "capabilities": ["native-storage-v1", "migration-ledger-v1", "alembic-migrations-v1", "storage-readiness-v1"],
     }
     if installation_identity:
         capabilities["capabilities"].append("installation-identity-v1")
-    if schema_revision != 3 or not installation_identity:
+    if schema_revision != 4 or not installation_identity:
         with pytest.raises(ValueError, match="worker image"):
             check_capabilities(capabilities, requirements)
     else:

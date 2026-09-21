@@ -73,6 +73,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "pig-trace-analyzer.secretName" . }}
                   key: {{ .Values.secrets.customerPostgresDsnKey }}
+            {{- if .Values.secrets.migrationPostgresDsnKey }}
+            - name: INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "pig-trace-analyzer.secretName" . }}
+                  key: {{ .Values.secrets.migrationPostgresDsnKey }}
+            {{- end }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp

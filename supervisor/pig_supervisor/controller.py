@@ -21,6 +21,8 @@ from .workloads import analyzer_resources, job_resource, secret_refs
 
 CAPABILITIES = frozenset(
     {
+        "alembic-migrations-v1",
+        "storage-readiness-v1",
         "native-storage-v1",
         "migration-ledger-v1",
         "installation-identity-v1",

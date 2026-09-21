@@ -23,6 +23,8 @@ spec:
       nginx.ingress.kubernetes.io/proxy-body-size: "256m"
   storage:
     postgres:
+      # Optional: schema owner used only by preflight and migration Jobs.
+      # migrationDsnSecretRef: {name: pig-migration, key: postgres-dsn}
       dsnSecretRef: {name: pig-credentials, key: postgres-dsn}
       caConfigMapRef: {name: pig-postgres-ca, key: ca.pem}
     # Replace with exactly one storage block from the Terraform output.

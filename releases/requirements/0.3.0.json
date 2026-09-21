@@ -8,7 +8,7 @@
   "capabilities": ["native-storage-v1", "migration-ledger-v1", "installation-identity-v1", "controller-self-update-v1", "crd-update-v1"],
   "recoveryMaxAgeHours": null,
   "destructiveMigration": false,
-  "schemaFrom": [0, 1],
-  "schemaTo": 2,
+  "schemaFrom": [0, 1, 2],
+  "schemaTo": 3,
   "controllerProtocol": 1
 }

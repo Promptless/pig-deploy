@@ -680,7 +680,7 @@ def test_forward_repair_can_replace_a_failed_target_at_safe_checkpoint():
     assert document["status"]["currentVersion"] == "1.0.1"
 
 
-@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-2-candidate"])
+@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-3-candidate"])
 def test_paused_secret_rotation_finishes_offline_without_repeating_migration(requirements):
     kube, document = FakeKube(), deployment()
     with client_for(manifest(**requirements)) as client:
@@ -1158,7 +1158,7 @@ def test_terminal_migration_waits_for_terminating_pods(action, outcome):
             assert kube.applied[-1]["metadata"]["name"] != job["metadata"]["name"]
 
 
-@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-2-candidate"])
+@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-3-candidate"])
 def test_quiesce_waits_for_terminating_analyzer_pods_and_resumes_with_apply(requirements) -> None:
     kube, document = FakeKube(), deployment()
     with client_for(manifest()) as client:
@@ -1199,7 +1199,7 @@ def test_quiesce_waits_for_terminating_analyzer_pods_and_resumes_with_apply(requ
         container = migration["spec"]["template"]["spec"]["containers"][0]
         assert container["args"] == ["supervised-migrate"]
         passed_requirements = json.loads(next(v["value"] for v in container["env"] if v["name"] == "PIG_REQUIREMENTS"))
-        assert passed_requirements["schemaFrom"] == [0, 1]
+        assert passed_requirements["schemaFrom"] == requirements.get("schemaFrom", [0, 1])
         assert passed_requirements["schemaTo"] == requirements.get("schemaTo", 1)
         controller.reconcile(document, 1, NOW)
         assert document["status"]["phase"] == "migration"

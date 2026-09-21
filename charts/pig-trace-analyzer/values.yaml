@@ -45,9 +45,7 @@ gateway:
     servicePortName: http
   tls: []
 instructionHub:
-  runtimeBaseUrl: ''
-  deploymentName: pig-trace-analyzer
-  deploymentInstanceId: ''
+  runtimeBaseUrl: https://api.gopromptless.ai
   configHash: ''
   storageBackend: postgres_s3
   traceObjectS3Bucket: ''
@@ -57,17 +55,13 @@ instructionHub:
   analysis:
     quietWindowHours: 0.5
     activationAt: ''
+    catalogEnabled: false
+    mirrorRoot: /var/lib/instruction-hub/analysis-mirrors
     modelApi:
       provider: openai
       authentication: api_key
       baseUrl: https://api.openai.com/v1
       model: gpt-5.6-sol
-    repository:
-      url: ''
-      id: 0
-      fullName: ''
-      tokenSecretEnabled: false
-      mirrorRoot: /var/lib/instruction-hub/analysis-mirrors
   traceObjectAzureAccountUrl: ''
   traceObjectAzureContainer: ''
   traceObjectGcsBucket: ''
@@ -79,12 +73,10 @@ secrets:
   installTokenKey: install-token
   customerPostgresDsnKey: customer-postgres-dsn
   analysisModelApiKeyKey: analysis-model-api-key
-  analysisRepositoryTokenKey: analysis-repository-token
   create: false
   installToken: ''
   customerPostgresDsn: ''
   analysisModelApiKey: ''
-  analysisRepositoryToken: ''
 migrationJob:
   enabled: true
 resources:

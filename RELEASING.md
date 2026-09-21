@@ -36,8 +36,11 @@ check can pass. No customer secret belongs in this repository or its evidence.
 
 1. Merge reviewed public source and the compatible private analyzer implementation.
    The analyzer's deployment-capabilities command must report controller protocol
-   1, schema revision 2, native `s3`/`azureBlob`/`gcs`, and the `preflight`,
-   `supervised-migrate`, `verify`, and `acceptance` commands.
+   1, schema revision 3, native `s3`/`azureBlob`/`gcs`, and the `preflight`,
+   `supervised-migrate`, `verify`, and `acceptance` commands. Its capabilities must
+   include `native-storage-v1`, `migration-ledger-v1`, and `installation-identity-v1`.
+   The identity capability ensures the analyzer can resolve its installation from
+   its credential without an operator-supplied deployment ID.
    Its private image workflow publishes a SHA tag, never a mutable release tag.
 2. With explicit publication authorization, run the supervisor candidate workflow
    on `main`. Record both image digests and the exact public source commit. The
@@ -80,19 +83,27 @@ check can pass. No customer secret belongs in this repository or its evidence.
    Acceptance expires after 14 days. `rollbackTo` contains bare manifest digests
    for rollback paths actually included in recovery acceptance.
 
-### Schema-2 candidate
+### Schema-3 candidate
 
-The 0.3.0 requirements accept starting schema revisions 0 and 1 and target revision
-2. Worker checks also accept the target revision, so retries and configuration
+The 0.3.0 requirements accept starting schema revisions 0, 1, and 2 and target revision
+3. Worker checks also accept the target revision, so retries and configuration
 rotation work after migration. Keep the supervisor's stop, migrate, start sequence.
 
-Revision 2 preserves trace records and their exact native object locations in
+Revision 3 adds instruction-source provenance to analysis runs without deleting
+existing data. Installations below revision 2 also receive the native-location
+migration, which preserves trace records and their exact native object locations in
 `trace_object_uri`. It removes the duplicate location column and synchronization
 objects. Conflicting or missing locations abort the migration transaction.
 `destructiveMigration` is false because this migration preserves application data;
-it does not mean a schema-1 image can run against the resulting database. Recover
-with a schema-2-compatible image or a forward repair. Include a `rollbackTo` entry
+it does not mean an older image can run against the resulting database. Older
+analyzers reject the revision-3 ledger even though its new column is additive. Recover
+with a schema-3-compatible image or a forward repair. Include a `rollbackTo` entry
 only for a tested recovery path between releases with the same schema revision.
+
+Select instruction repositories in PIG Settings through the organization's GitHub
+connection. The analyzer retrieves the selected-source catalog and repository
+access through Runtime. Deployment configuration carries model and infrastructure
+credentials; it does not carry repository identities or a repository token.
 
 Define upgrade fixtures before testing upgrades. Each minor or major transition
 needs immutable source and image identities, a compatible supervisor-capable

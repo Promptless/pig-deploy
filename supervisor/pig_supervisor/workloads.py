@@ -21,7 +21,6 @@ def secret_refs(spec: DeploymentSpec) -> list[SecretRef]:
             spec.hosted.install_token_secret_ref,
             spec.storage.postgres.dsn_secret_ref,
             spec.analysis.model.api_key_secret_ref,
-            spec.analysis.repository.token_secret_ref,
         )
         if ref
     ]
@@ -29,19 +28,14 @@ def secret_refs(spec: DeploymentSpec) -> list[SecretRef]:
 
 def pod_template(spec: DeploymentSpec, release: Release, config_hash: str, deployment_name: str) -> dict:
     """Analyzer and Jobs use the same customer identity, CA, environment, and limits."""
-    model, repository = spec.analysis.model, spec.analysis.repository
+    model = spec.analysis.model
     values = {
         "RUNTIME_BASE_URL": spec.hosted.runtime_url,
-        "DEPLOYMENT_NAME": deployment_name,
-        "DEPLOYMENT_INSTANCE_ID": spec.hosted.deployment_id,
         "CONFIG_HASH": config_hash,
         "WORKER_VERSION": release.version,
         "CHART_VERSION": release.version,
         "ANALYSIS_ACTIVATION_AT": spec.analysis.activation_at,
         "ANALYSIS_QUIET_WINDOW_HOURS": spec.analysis.quiet_window_hours,
-        "ANALYSIS_REPOSITORY_URL": repository.url,
-        "ANALYSIS_REPOSITORY_ID": repository.id,
-        "ANALYSIS_REPOSITORY_FULL_NAME": repository.full_name,
         "ANALYSIS_MIRROR_ROOT": "/tmp/analysis-mirrors",
         "ANALYSIS_MODEL_PROVIDER": model.provider,
         "ANALYSIS_MODEL_AUTHENTICATION": model.authentication,
@@ -75,12 +69,8 @@ def pod_template(spec: DeploymentSpec, release: Release, config_hash: str, deplo
         env_secret("INSTRUCTION_HUB_INSTALL_TOKEN", spec.hosted.install_token_secret_ref),
         env_secret("INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN", storage.postgres.dsn_secret_ref),
     ]
-    for name, ref in (
-        ("ANALYSIS_MODEL_API_KEY", model.api_key_secret_ref),
-        ("ANALYSIS_REPOSITORY_TOKEN", repository.token_secret_ref),
-    ):
-        if ref:
-            env.append(env_secret("INSTRUCTION_HUB_" + name, ref))
+    if model.api_key_secret_ref:
+        env.append(env_secret("INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY", model.api_key_secret_ref))
     mounts = [{"name": "tmp", "mountPath": "/tmp"}]
     volumes = [{"name": "tmp", "emptyDir": {}}]
     if storage.postgres.ca_config_map_ref:

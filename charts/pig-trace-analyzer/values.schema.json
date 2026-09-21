@@ -252,26 +252,12 @@
                 }
               ]
             },
-            "repository": {
-              "type": "object",
-              "properties": {
-                "url": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "fullName": {
-                  "type": "string"
-                },
-                "tokenSecretEnabled": {
-                  "type": "boolean"
-                },
-                "mirrorRoot": {
-                  "type": "string"
-                }
-              }
+            "catalogEnabled": {
+              "type": "boolean"
+            },
+            "mirrorRoot": {
+              "type": "string",
+              "minLength": 1
             }
           }
         },
@@ -317,12 +303,6 @@
           "type": "string"
         },
         "analysisModelApiKey": {
-          "type": "string"
-        },
-        "analysisRepositoryTokenKey": {
-          "type": "string"
-        },
-        "analysisRepositoryToken": {
           "type": "string"
         }
       }

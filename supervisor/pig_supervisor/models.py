@@ -51,8 +51,7 @@ class ReleasePolicy(Contract):
 
 
 class Hosted(Contract):
-    runtime_url: str = Field(alias="runtimeURL")
-    deployment_id: str = Field(alias="deploymentID", min_length=1, max_length=200)
+    runtime_url: str = Field(default="https://api.gopromptless.ai", alias="runtimeURL")
     install_token_secret_ref: SecretRef
 
     @field_validator("runtime_url")
@@ -113,19 +112,6 @@ class Storage(Contract):
         return self
 
 
-class Repository(Contract):
-    url: str = Field(pattern=r"^https://github\.com/[^/]+/[^/]+\.git$")
-    id: int = Field(gt=0)
-    full_name: str = Field(pattern=r"^[^/]+/[^/]+$")
-    token_secret_ref: SecretRef | None = None
-
-    @model_validator(mode="after")
-    def identity(self) -> Self:
-        if self.url.removeprefix("https://github.com/").removesuffix(".git").casefold() != self.full_name.casefold():
-            raise ValueError("repository URL must match fullName")
-        return self
-
-
 class Model(Contract):
     provider: Literal["openai", "azure_openai", "aws_bedrock"]
     authentication: Literal["api_key", "aws_sigv4"]
@@ -166,7 +152,6 @@ class Model(Contract):
 class Analysis(Contract):
     activation_at: str = ""
     quiet_window_hours: float = Field(default=0.5, gt=0)
-    repository: Repository
     model: Model
 
 

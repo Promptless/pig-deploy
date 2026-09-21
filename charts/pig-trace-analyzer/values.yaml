@@ -55,7 +55,8 @@ instructionHub:
   analysis:
     quietWindowHours: 0.5
     activationAt: ''
-    mirrorRoot: /tmp/analysis-mirrors
+    catalogEnabled: false
+    mirrorRoot: /var/lib/instruction-hub/analysis-mirrors
     modelApi:
       provider: openai
       authentication: api_key

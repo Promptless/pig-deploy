@@ -99,6 +99,8 @@ def test_installation_credential_supplies_identity_for_every_workload(runtime_ur
         )
         assert "INSTRUCTION_HUB_DEPLOYMENT_INSTANCE_ID" not in env
         assert "INSTRUCTION_HUB_DEPLOYMENT_NAME" not in env
+        assert not any(name.startswith("INSTRUCTION_HUB_ANALYSIS_REPOSITORY_") for name in env)
+        assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_NAME"]["value"] == "gpt-5"
         assert env["INSTRUCTION_HUB_INSTALL_TOKEN"]["valueFrom"]["secretKeyRef"] == {
             "name": "pig-credentials",
             "key": "install-token",

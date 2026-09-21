@@ -78,16 +78,17 @@ spec:
             {{- include "pig-trace-analyzer.observabilityEnv" . | nindent 12 }}
             - name: INSTRUCTION_HUB_ANALYSIS_QUIET_WINDOW_HOURS
               value: {{ .Values.instructionHub.analysis.quietWindowHours | quote }}
+            {{- if or .Values.instructionHub.analysis.activationAt .Values.instructionHub.analysis.catalogEnabled }}
             {{- if .Values.instructionHub.analysis.activationAt }}
             - name: INSTRUCTION_HUB_ANALYSIS_ACTIVATION_AT
               value: {{ .Values.instructionHub.analysis.activationAt | quote }}
             {{- end }}
             - name: INSTRUCTION_HUB_ANALYSIS_MODEL_PROVIDER
-              value: {{ required "instructionHub.analysis.modelApi.provider is required" .Values.instructionHub.analysis.modelApi.provider | quote }}
+              value: {{ required "instructionHub.analysis.modelApi.provider is required when trace analysis or catalog indexing is enabled" .Values.instructionHub.analysis.modelApi.provider | quote }}
             - name: INSTRUCTION_HUB_ANALYSIS_MODEL_AUTHENTICATION
-              value: {{ required "instructionHub.analysis.modelApi.authentication is required" .Values.instructionHub.analysis.modelApi.authentication | quote }}
+              value: {{ required "instructionHub.analysis.modelApi.authentication is required when trace analysis or catalog indexing is enabled" .Values.instructionHub.analysis.modelApi.authentication | quote }}
             - name: INSTRUCTION_HUB_ANALYSIS_MODEL_BASE_URL
-              value: {{ required "instructionHub.analysis.modelApi.baseUrl is required" .Values.instructionHub.analysis.modelApi.baseUrl | quote }}
+              value: {{ required "instructionHub.analysis.modelApi.baseUrl is required when trace analysis or catalog indexing is enabled" .Values.instructionHub.analysis.modelApi.baseUrl | quote }}
             {{- if eq .Values.instructionHub.analysis.modelApi.authentication "api_key" }}
             - name: INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY
               valueFrom:
@@ -96,9 +97,10 @@ spec:
                   key: {{ .Values.secrets.analysisModelApiKeyKey }}
             {{- end }}
             - name: INSTRUCTION_HUB_ANALYSIS_MODEL_NAME
-              value: {{ required "instructionHub.analysis.modelApi.model is required" .Values.instructionHub.analysis.modelApi.model | quote }}
+              value: {{ required "instructionHub.analysis.modelApi.model is required when trace analysis or catalog indexing is enabled" .Values.instructionHub.analysis.modelApi.model | quote }}
             - name: INSTRUCTION_HUB_ANALYSIS_MIRROR_ROOT
               value: {{ .Values.instructionHub.analysis.mirrorRoot | quote }}
+            {{- end }}
             - name: INSTRUCTION_HUB_INSTALL_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -123,7 +125,15 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- include "pig-trace-analyzer.caMount" . | nindent 12 }}
+          {{- if or .Values.instructionHub.analysis.activationAt .Values.instructionHub.analysis.catalogEnabled }}
+            - name: analysis-mirrors
+              mountPath: /var/lib/instruction-hub
+          {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
         {{- include "pig-trace-analyzer.caVolume" . | nindent 8 }}
+      {{- if or .Values.instructionHub.analysis.activationAt .Values.instructionHub.analysis.catalogEnabled }}
+        - name: analysis-mirrors
+          emptyDir: {}
+      {{- end }}

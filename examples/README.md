@@ -42,12 +42,11 @@ module in another root, use its Git URL with the release's full source commit as
 3. Bootstrap the published `pig-supervisor` chart once in `pig-system`, with
    `watchNamespace: pig` and its pinned chart version. If Flux performed bootstrap,
    suspend its HelmRelease before proceeding.
-4. Select instruction repositories in PIG Settings using your GitHub connection.
-   Adapt [pig-deployment.yaml](pig-deployment.yaml): paste exactly one native
-   storage block from the output and set the analyzer credential Secret reference
-   and model configuration. Apply it through GitOps. PIG manages its generated
-   workloads thereafter; repository identities and tokens are managed by Runtime.
-5. Enroll a real host, ingest a trace, and verify the exact canonical object,
+4. Adapt [pig-deployment.yaml](pig-deployment.yaml): paste exactly one native
+   storage block from the output, set hosted installation and model values,
+   and apply it through GitOps. PIG manages its generated workloads thereafter.
+5. Select instruction repositories in Promptless Settings.
+6. Enroll a real host, ingest a trace, and verify the exact canonical object,
    succeeded analysis, and Dashboard synchronization. See [the contract](../CONTRACT.md).
 
 Sizing and backup defaults are starting points to review against workload and

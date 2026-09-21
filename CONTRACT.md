@@ -46,6 +46,19 @@ output supplies PostgreSQL metadata, exactly one native storage block,
 `service_account_annotations`, and `pod_labels`. It contains no credential values.
 Copy only those relevant fields into customer-owned Kubernetes configuration.
 
+Create a named analyzer installation in Promptless Settings and store its credential
+in the Secret referenced by `hosted.installTokenSecretRef`. The analyzer resolves
+its installation identity from that credential before serving or running maintenance
+commands. Replicas, restarts, and credential replacement use the same installation.
+`hosted.runtimeURL` defaults to `https://api.gopromptless.ai`; override it only for
+a different Promptless environment.
+
+Credential rotation in Settings immediately revokes the previous credential.
+Update the customer-managed Secret with the replacement; the supervisor revalidates
+and restarts the analyzer. Hosted access is interrupted until that completes.
+Revoking a credential preserves the installation and its history. Issue a replacement
+for that installation to restore access. PIG does not write customer Secrets.
+
 Configure HTTPS for `endpoint.hostname` through the externally managed ingress
 controller. Set `endpoint.tlsSecretName` when the controller reads a Kubernetes
 TLS Secret. Omit it when the controller uses a certificate configured through
@@ -135,11 +148,15 @@ UTF-8 JSON. Both command outputs use `sha256:` followed by 64 lowercase hex
 characters. Never substitute an image digest or invent these values.
 
 Every destructive migration requires recovery confirmation. Its ConfigMap data
-must contain `releaseDigest`, `deploymentID` matching `spec.hosted.deploymentID`,
+must contain `releaseDigest`, `deploymentUID` matching the PIGDeployment's `metadata.uid`,
 `confirmedAt` with a timezone, `postgresRecoveryPoint`, and `objectRecoveryPoint`.
 The timestamp must fall within the release's `recoveryMaxAgeHours`. The
 supervisor checks it before starting a transition and immediately before starting
 a new migration Job, including after a pause.
+
+Read the UID with `kubectl get pigdeployment NAME -n NAMESPACE -o jsonpath='{.metadata.uid}'`.
+Recreating the Kubernetes object requires a new confirmation, even when its name
+and Promptless installation are unchanged. This UID is not a registration credential.
 
 For capacity prerequisites that PIG cannot directly verify, the same ConfigMap
 also needs `capacityConfirmedAt`, `capacityRequirementsDigest`, and

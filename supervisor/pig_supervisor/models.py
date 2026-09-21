@@ -51,8 +51,7 @@ class ReleasePolicy(Contract):
 
 
 class Hosted(Contract):
-    runtime_url: str = Field(alias="runtimeURL")
-    deployment_id: str = Field(alias="deploymentID", min_length=1, max_length=200)
+    runtime_url: str = Field(default="https://api.gopromptless.ai", alias="runtimeURL")
     install_token_secret_ref: SecretRef
 
     @field_validator("runtime_url")

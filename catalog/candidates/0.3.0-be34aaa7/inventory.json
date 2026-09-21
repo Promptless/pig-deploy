@@ -1,0 +1,36 @@
+{
+  "version": "0.3.0",
+  "sourceCommit": "be34aaa7cecfa0bd5c424c8866589bab92f9558e",
+  "analyzerSourceCommit": "965d75670048ffede7b5e99f29accdbfe429c1f3",
+  "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:9bff062f8702c6efa6d72ced4ddb5aafc18861ee913ec0f18ff638f7cafa55a3",
+  "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:1c7b7c90818354e4a8edcd3fe7fbeeb28cdaedf11512c5c6968012b0433f872e",
+  "requirementsDigest": "a78be06deb18a7135751745d363feca6b6f5eb4e0d39fcf302ee48c964a83eb0",
+  "candidateWorkflow": "https://github.com/Promptless/pig-deploy/actions/runs/35663755049",
+  "identityVerifiedAt": "2026-09-21T22:41:21.855090+00:00",
+  "anonymousManifestsVerified": true,
+  "supervisorRevisionLabelVerified": true,
+  "canonicalAcceptanceComplete": false,
+  "imageExecutionVerifiedAt": "2026-09-21T22:41:55.523316+00:00",
+  "clusterImagePullVerified": true,
+  "supervisorVersionVerified": "0.3.0",
+  "analyzerCapabilities": {
+    "capabilities": [
+      "native-storage-v1",
+      "migration-ledger-v1",
+      "installation-identity-v1"
+    ],
+    "commands": [
+      "preflight",
+      "supervised-migrate",
+      "verify",
+      "acceptance"
+    ],
+    "controllerProtocol": 1,
+    "schemaRevision": 3,
+    "storageBackends": [
+      "s3",
+      "azureBlob",
+      "gcs"
+    ]
+  }
+}

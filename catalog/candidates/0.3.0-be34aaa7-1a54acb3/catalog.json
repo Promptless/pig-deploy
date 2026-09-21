@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "releases": [
+    {
+      "url": "https://raw.githubusercontent.com/Promptless/pig-deploy/fb3ea49fe6483aca28f556fc6ad2514607551be2/catalog/candidates/0.3.0-be34aaa7-1a54acb3/release.json",
+      "sha256": "06810cad38ad42ee3b8e59e152b2b7cee8d916f48a637ef1da547a3342472802",
+      "version": "0.3.0"
+    }
+  ]
+}

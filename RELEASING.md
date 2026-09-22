@@ -1,7 +1,7 @@
 # Release operations
 
-The stable catalog is empty until an accepted release is published and its catalog
-promotion is reviewed. Local tests are not installation acceptance. Versions 0.3.0
+The source prepares version 0.3.2 with storage hardening. The stable catalog selects
+the published 0.3.1 release. Local tests are not installation acceptance. Versions 0.3.0
 and 0.3.1 are AWS-only releases. Report-backed acceptance covers a real AWS clean
 installation and canonical pipeline, plus the unattended 0.3.0 to 0.3.1 patch update
 for 0.3.1. Version 0.3.1 may instead use the explicit owner sign-off described below.
@@ -99,7 +99,7 @@ check can pass. No customer secret belongs in this repository or its evidence.
 
 ### Schema-4 candidate
 
-The 0.3.0 requirements accept starting schema revisions 0–3 and target revision 4.
+The 0.3.2 requirements accept starting schema revisions 0–3 and target revision 4.
 The worker also accepts the target revision for retries and configuration rotation.
 The image must advertise `alembic-migrations-v1` and `storage-readiness-v1`.
 Worker CI runs installation and recovery tests on PostgreSQL 15–18 before customer GHCR image

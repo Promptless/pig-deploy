@@ -21,7 +21,7 @@ NOW = datetime(2026, 9, 15, tzinfo=UTC)
 ROOT = "https://raw.githubusercontent.com/Promptless/pig-deploy/" + "e" * 40
 CATALOG = "https://raw.githubusercontent.com/Promptless/pig-deploy/main/catalog/stable.json"
 CANDIDATE_REQUIREMENTS = json.loads(
-    (Path(__file__).resolve().parents[1] / "releases/requirements/0.3.0.json").read_text()
+    (Path(__file__).resolve().parents[1] / "releases/requirements/0.3.2.json").read_text()
 )
 
 

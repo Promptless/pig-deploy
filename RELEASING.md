@@ -1,6 +1,7 @@
 # Release operations
 
-The first source candidate is 0.3.0. The stable catalog is empty until an accepted
+The source prepares version 0.3.2 with storage hardening. The stable catalog is
+empty until an accepted
 release is published and its catalog promotion is reviewed. Local tests are not
 installation acceptance. Version 0.3.0 requires a real AWS clean installation and
 canonical pipeline acceptance before publication. Azure and GCP support is

@@ -29,8 +29,9 @@ source. Analyzer application source is maintained separately.
   engineering validation still required before the first release.
 - [Customer guides](https://promptless.ai/docs/governance/deploy-the-worker/plan-your-deployment/).
 
-The source prepares the **0.3.1 upgrade candidate** for the
-[AWS unattended update test](catalog/testing/aws-updates/README.md).
+The source prepares **0.3.2**, which adds storage hardening and targets schema
+revision 4. The [AWS unattended update test](catalog/testing/aws-updates/README.md)
+retains its pinned schema-3 candidates.
 No installable release is implied
 by this checkout: `catalog/stable.json` starts empty. A release becomes eligible
 for automatic updates only after accepted images and charts are publicly

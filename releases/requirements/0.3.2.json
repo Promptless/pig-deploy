@@ -5,10 +5,10 @@
   "operatorCapacityRequirements": [],
   "capacityConfirmationMaxAgeHours": 24,
   "storageBackends": ["s3", "azureBlob", "gcs"],
-  "capabilities": ["native-storage-v1", "migration-ledger-v1", "installation-identity-v1", "controller-self-update-v1", "crd-update-v1"],
+  "capabilities": ["native-storage-v1", "migration-ledger-v1", "installation-identity-v1", "alembic-migrations-v1", "storage-readiness-v1", "controller-self-update-v1", "crd-update-v1"],
   "recoveryMaxAgeHours": null,
   "destructiveMigration": false,
-  "schemaFrom": [0, 1, 2],
-  "schemaTo": 3,
+  "schemaFrom": [0, 1, 2, 3],
+  "schemaTo": 4,
   "controllerProtocol": 1
 }

@@ -135,7 +135,7 @@ def test_stale_worker_image_cannot_be_relabelled_as_native_release():
     "missing_capability", [None, "installation-identity-v1", "alembic-migrations-v1", "storage-readiness-v1"]
 )
 def test_candidate_requires_schema_4_and_worker_capabilities(schema_revision, missing_capability):
-    _, requirements = evidence_data()
+    requirements = Requirements.model_validate_json((ROOT / "releases/requirements/0.3.2.json").read_text())
     capabilities = {
         "controllerProtocol": 1,
         "schemaRevision": schema_revision,

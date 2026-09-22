@@ -10,6 +10,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import yaml
 from pig_supervisor.catalog import canonical_digest
 from pig_supervisor.models import Requirements
 from pig_supervisor.publication import (
@@ -171,6 +172,11 @@ def test_real_helm_package_immutable_manifest_and_catalog(tmp_path):
     root, output = tmp_path / "source", tmp_path / "packages"
     root.mkdir()
     shutil.copytree(ROOT / "charts", root / "charts")
+    for chart in (root / "charts").iterdir():
+        metadata_path = chart / "Chart.yaml"
+        metadata = yaml.safe_load(metadata_path.read_text())
+        metadata.update(version="0.3.0", appVersion="0.3.0")
+        metadata_path.write_text(yaml.safe_dump(metadata))
     (root / "catalog").mkdir()
     (root / "catalog/stable.json").write_text('{"schemaVersion":1,"releases":[]}')
     subprocess.run(["git", "init", "-q", str(root)], check=True)

@@ -131,19 +131,27 @@ def test_stale_worker_image_cannot_be_relabelled_as_native_release():
 
 
 @pytest.mark.parametrize("schema_revision", [1, 2, 3, 4])
-@pytest.mark.parametrize("installation_identity", [False, True])
-def test_candidate_requires_schema_3_worker_and_credential_identity(schema_revision, installation_identity):
-    _, requirements = evidence_data()
+@pytest.mark.parametrize(
+    "missing_capability", [None, "installation-identity-v1", "alembic-migrations-v1", "storage-readiness-v1"]
+)
+def test_candidate_requires_schema_4_and_worker_capabilities(schema_revision, missing_capability):
+    requirements = Requirements.model_validate_json((ROOT / "releases/requirements/0.3.2.json").read_text())
     capabilities = {
         "controllerProtocol": 1,
         "schemaRevision": schema_revision,
         "storageBackends": ["s3", "azureBlob", "gcs"],
         "commands": ["preflight", "supervised-migrate", "verify", "acceptance"],
-        "capabilities": ["native-storage-v1", "migration-ledger-v1"],
+        "capabilities": [
+            "native-storage-v1",
+            "migration-ledger-v1",
+            "installation-identity-v1",
+            "alembic-migrations-v1",
+            "storage-readiness-v1",
+        ],
     }
-    if installation_identity:
-        capabilities["capabilities"].append("installation-identity-v1")
-    if schema_revision != 3 or not installation_identity:
+    if missing_capability:
+        capabilities["capabilities"].remove(missing_capability)
+    if schema_revision != 4 or missing_capability:
         with pytest.raises(ValueError, match="worker image"):
             check_capabilities(capabilities, requirements)
     else:

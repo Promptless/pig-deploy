@@ -21,7 +21,7 @@ NOW = datetime(2026, 9, 15, tzinfo=UTC)
 ROOT = "https://raw.githubusercontent.com/Promptless/pig-deploy/" + "e" * 40
 CATALOG = "https://raw.githubusercontent.com/Promptless/pig-deploy/main/catalog/stable.json"
 CANDIDATE_REQUIREMENTS = json.loads(
-    (Path(__file__).resolve().parents[1] / "releases/requirements/0.3.0.json").read_text()
+    (Path(__file__).resolve().parents[1] / "releases/requirements/0.3.2.json").read_text()
 )
 
 
@@ -680,7 +680,7 @@ def test_forward_repair_can_replace_a_failed_target_at_safe_checkpoint():
     assert document["status"]["currentVersion"] == "1.0.1"
 
 
-@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-3-candidate"])
+@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-4-candidate"])
 def test_paused_secret_rotation_finishes_offline_without_repeating_migration(requirements):
     kube, document = FakeKube(), deployment()
     with client_for(manifest(**requirements)) as client:
@@ -1158,7 +1158,7 @@ def test_terminal_migration_waits_for_terminating_pods(action, outcome):
             assert kube.applied[-1]["metadata"]["name"] != job["metadata"]["name"]
 
 
-@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-3-candidate"])
+@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-4-candidate"])
 def test_quiesce_waits_for_terminating_analyzer_pods_and_resumes_with_apply(requirements) -> None:
     kube, document = FakeKube(), deployment()
     with client_for(manifest()) as client:

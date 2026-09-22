@@ -79,6 +79,7 @@ class Endpoint(Contract):
 
 class Postgres(Contract):
     dsn_secret_ref: SecretRef
+    migration_dsn_secret_ref: SecretRef | None = None
     ca_config_map_ref: SecretRef | None = None
 
 

@@ -39,7 +39,7 @@ spec:
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      terminationGracePeriodSeconds: 60
+      terminationGracePeriodSeconds: 120
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -113,8 +113,14 @@ spec:
                   key: {{ .Values.secrets.customerPostgresDsnKey }}
           readinessProbe:
             httpGet:
+              path: /readyz
+              port: http
+          startupProbe:
+            httpGet:
               path: /healthz
               port: http
+            periodSeconds: 5
+            failureThreshold: 36
           livenessProbe:
             httpGet:
               path: /healthz

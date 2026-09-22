@@ -38,6 +38,44 @@ def test_all_workloads_use_customer_node_selector(node_selector: dict[str, str])
             assert resource["spec"]["template"]["spec"]["nodeSelector"] == node_selector
 
 
+def test_migration_credentials_stay_out_of_serving_and_verification() -> None:
+    """Only preflight and migration Jobs receive the schema owner's credential."""
+    deployment = yaml.safe_load((ROOT / "examples/pig-deployment.yaml").read_text())
+    deployment["metadata"]["uid"] = "example-uid"
+    ref = {"name": "migration-only", "key": "dsn"}
+    deployment["spec"]["storage"]["postgres"]["migrationDsnSecretRef"] = ref
+    spec = DeploymentSpec.model_validate(deployment["spec"])
+    release = Release.model_validate(
+        {
+            "version": "0.3.0",
+            "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:" + "a" * 64,
+            "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:" + "b" * 64,
+            "requirements": {
+                "storageBackends": ["s3"],
+                "schemaFrom": [0, 1, 2, 3],
+                "schemaTo": 4,
+                "capabilities": ["storage-readiness-v1"],
+            },
+        }
+    )
+    resources = analyzer_resources(deployment, spec, release, "config-hash")
+    for resource in resources:
+        if resource["kind"] == "Deployment":
+            container = resource["spec"]["template"]["spec"]["containers"][0]
+            assert container["readinessProbe"]["httpGet"]["path"] == "/readyz"
+            assert container["livenessProbe"]["httpGet"]["path"] == "/healthz"
+            assert not any(e["name"] == "INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN" for e in container["env"])
+    for phase in ("preflight", "migration", "verify", "acceptance"):
+        job = job_resource(deployment, spec, release, "a" * 64, "config-hash", phase, 0)
+        container = job["spec"]["template"]["spec"]["containers"][0]
+        env = {entry["name"]: entry for entry in container["env"]}
+        if phase in ("preflight", "migration"):
+            assert env["INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN"]["valueFrom"]["secretKeyRef"] == ref
+        else:
+            assert "INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN" not in env
+        assert "startupProbe" not in container
+
+
 @pytest.mark.parametrize("authentication", ["api_key", "aws_sigv4"])
 def test_hosted_repository_selection_needs_no_customer_repository_credentials(authentication: str) -> None:
     deployment = yaml.safe_load((ROOT / "examples/pig-deployment.yaml").read_text())

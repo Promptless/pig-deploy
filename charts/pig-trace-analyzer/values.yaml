@@ -71,6 +71,7 @@ instructionHub:
 secrets:
   existingSecretName: ''
   installTokenKey: install-token
+  migrationPostgresDsnKey: ''
   customerPostgresDsnKey: customer-postgres-dsn
   analysisModelApiKeyKey: analysis-model-api-key
   create: false

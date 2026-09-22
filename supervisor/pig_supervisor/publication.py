@@ -109,7 +109,10 @@ def check_capabilities(capabilities: dict, requirements: Requirements) -> None:
         or capabilities.get("schemaRevision") != requirements.schema_to
         or not set(requirements.storage_backends) <= set(capabilities.get("storageBackends", []))
         or not {"preflight", "supervised-migrate", "verify", "acceptance"} <= set(capabilities.get("commands", []))
-        or not {"native-storage-v1", "migration-ledger-v1", "installation-identity-v1"}
+        or not (
+            {"native-storage-v1", "migration-ledger-v1", "installation-identity-v1"}
+            | (set(requirements.capabilities) & {"alembic-migrations-v1", "storage-readiness-v1"})
+        )
         <= set(capabilities.get("capabilities", []))
     ):
         raise ValueError("worker image does not implement this deployment contract")

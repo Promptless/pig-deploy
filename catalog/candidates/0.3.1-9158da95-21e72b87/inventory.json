@@ -1,0 +1,39 @@
+{
+  "version": "0.3.1",
+  "sourceCommit": "9158da95ff05536133e05d65c47a9271dc855bae",
+  "analyzerSourceCommit": "21e72b87367813b15a926989ec397b56fd121a53",
+  "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:ba51c731cca00cbaa6075577995ca795048d5e0a041b1b4503a554c159546962",
+  "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:86038bc595bc427e0b73f7335d057fa3b5655a23e90cfa188895dec95d2a1627",
+  "requirementsDigest": "355c29437b278391c55c98569439adac14cf7aa505ae3870a11d17b5fcb25c3c",
+  "analyzerWorkflow": "https://github.com/Promptless/promptless/actions/runs/35788448476",
+  "supervisorWorkflow": "https://github.com/Promptless/pig-deploy/actions/runs/35788534843",
+  "identityVerifiedAt": "2026-09-22T21:48:33.540653+00:00",
+  "anonymousManifestsVerified": true,
+  "supervisorRevisionLabelVerified": true,
+  "upgradeAcceptanceComplete": false,
+  "imageExecutionVerifiedAt": "2026-09-22T21:51:03.189288+00:00",
+  "clusterImagePullVerified": true,
+  "supervisorVersionVerified": "0.3.1",
+  "analyzerVersionVerified": "0.3.1",
+  "analyzerAnyioVersionVerified": "4.14.2",
+  "analyzerCapabilities": {
+    "controllerProtocol": 1,
+    "schemaRevision": 3,
+    "storageBackends": [
+      "s3",
+      "azureBlob",
+      "gcs"
+    ],
+    "commands": [
+      "preflight",
+      "supervised-migrate",
+      "verify",
+      "acceptance"
+    ],
+    "capabilities": [
+      "native-storage-v1",
+      "migration-ledger-v1",
+      "installation-identity-v1"
+    ]
+  }
+}

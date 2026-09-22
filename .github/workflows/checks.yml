@@ -40,7 +40,7 @@ jobs:
       - name: Build supervisor image without publishing
         run: |
           docker build -f supervisor/Dockerfile -t pig-supervisor:test .
-          test "$(docker run --rm pig-supervisor:test --version)" = "0.3.0"
+          test "$(docker run --rm pig-supervisor:test --version)" = "$(uv run pig-supervisor --version)"
   terraform:
     runs-on: ubuntu-latest
     timeout-minutes: 15

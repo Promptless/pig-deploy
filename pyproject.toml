@@ -13,7 +13,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["supervisor/pig_supervisor"]
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.12", "jsonschema>=4", "python-hcl2>=7"]
+dev = ["pytest>=8", "ruff>=0.16.8", "jsonschema>=4", "python-hcl2>=7"]
 [tool.ruff]
 line-length = 120
 [tool.pytest.ini_options]

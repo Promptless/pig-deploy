@@ -22,6 +22,39 @@
       ],
       "title": "CloudAcceptance",
       "type": "object"
+    },
+    "OwnerSignOff": {
+      "additionalProperties": false,
+      "properties": {
+        "approvedBy": {
+          "pattern": "\\S",
+          "title": "Approvedby",
+          "type": "string"
+        },
+        "approvedAt": {
+          "format": "date-time",
+          "title": "Approvedat",
+          "type": "string"
+        },
+        "scope": {
+          "const": "aws-only",
+          "title": "Scope",
+          "type": "string"
+        },
+        "statement": {
+          "pattern": "\\S",
+          "title": "Statement",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approvedBy",
+        "approvedAt",
+        "scope",
+        "statement"
+      ],
+      "title": "OwnerSignOff",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -59,7 +92,15 @@
       "type": "array"
     },
     "eks": {
-      "$ref": "#/$defs/CloudAcceptance"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CloudAcceptance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "aks": {
       "anyOf": [
@@ -82,6 +123,17 @@
         }
       ],
       "default": null
+    },
+    "ownerSignOff": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OwnerSignOff"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
@@ -89,8 +141,7 @@
     "sourceCommit",
     "analyzerImage",
     "supervisorImage",
-    "requirementsDigest",
-    "eks"
+    "requirementsDigest"
   ],
   "title": "AcceptanceEvidence",
   "type": "object"

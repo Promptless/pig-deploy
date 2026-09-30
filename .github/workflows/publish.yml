@@ -102,6 +102,9 @@ jobs:
             git push origin "refs/tags/v$VERSION"
           fi
           printf 'Accepted PIG deployment artifacts. Source: %s. Verify SHA256SUMS and catalog manifest digests.\n' "$SOURCE_COMMIT" > "$RELEASE_OUTPUT/notes.md"
+          if jq -e '.ownerSignOff != null' "$EVIDENCE" > /dev/null; then
+            printf '\nAWS-only release approved by the release owner in place of stored acceptance reports. Azure and GCP remain experimental. See releases/acceptance/%s.json on main for the sign-off.\n' "$VERSION" >> "$RELEASE_OUTPUT/notes.md"
+          fi
           if ! gh release view "v$VERSION" > /dev/null 2>&1; then
             gh release create "v$VERSION" --verify-tag --title "PIG deployment $VERSION" --notes-file "$RELEASE_OUTPUT/notes.md" "$RELEASE_OUTPUT/pig-deploy-$VERSION.tar.gz" "$RELEASE_OUTPUT/SHA256SUMS" "$RELEASE_OUTPUT/pig-supervisor-$VERSION.tgz" "$RELEASE_OUTPUT/pig-trace-analyzer-$VERSION.tgz" "$RELEASE_OUTPUT/release.json"
           fi

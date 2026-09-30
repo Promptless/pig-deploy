@@ -103,6 +103,67 @@ def test_aws_patch_release_cannot_advertise_untested_rollback():
     assert validate_evidence(data, "0.3.1", NOW).rollback_to == ["c" * 64]
 
 
+def owner_sign_off_data():
+    data, _ = evidence_data()
+    data["version"] = "0.3.1"
+    del data["eks"]
+    data["ownerSignOff"] = {
+        "approvedBy": "release-owner",
+        "approvedAt": NOW.isoformat(),
+        "scope": "aws-only",
+        "statement": "Approve AWS-only publication in place of stored acceptance reports.",
+    }
+    return data
+
+
+def test_owner_sign_off_accepts_exact_aws_patch_artifacts_without_claiming_tests():
+    data = owner_sign_off_data()
+    accepted = validate_evidence(data, "0.3.1", NOW)
+    assert accepted.eks is None
+    assert accepted.owner_sign_off.approved_by == "release-owner"
+    data["analyzerImage"] = data["supervisorImage"]
+    with pytest.raises(ValueError, match="worker image repository"):
+        validate_evidence(data, "0.3.1", NOW)
+
+
+@pytest.mark.parametrize("version", ["0.3.0", "0.3.2", "1.0.0"])
+def test_owner_sign_off_is_not_a_general_release_bypass(version):
+    data = owner_sign_off_data()
+    data["version"] = version
+    with pytest.raises(ValueError, match="only for AWS-only 0.3.1"):
+        validate_evidence(data, version, NOW)
+
+
+@pytest.mark.parametrize("cloud", ["eks", "aks", "gke"])
+def test_owner_sign_off_cannot_mix_with_test_reports_or_rollback(cloud):
+    data = owner_sign_off_data()
+    reports, _ = evidence_data()
+    data[cloud] = reports["eks"]
+    with pytest.raises(ValueError, match="cloud test evidence"):
+        validate_evidence(data, "0.3.1", NOW)
+    del data[cloud]
+    data["rollbackTo"] = ["c" * 64]
+    with pytest.raises(ValueError, match="tested rollback"):
+        validate_evidence(data, "0.3.1", NOW)
+
+
+@pytest.mark.parametrize("offset", [-1, 15])
+def test_owner_sign_off_requires_recent_approval(offset):
+    with pytest.raises(ValueError, match="fourteen days"):
+        validate_evidence(owner_sign_off_data(), "0.3.1", NOW + timedelta(days=offset))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("approvedBy", " "), ("statement", ""), ("scope", "all-clouds"), ("approvedAt", "2026-09-15T00:00:00")],
+)
+def test_owner_sign_off_requires_explicit_owner_scope_statement_and_timezone(field, value):
+    data = owner_sign_off_data()
+    data["ownerSignOff"][field] = value
+    with pytest.raises(ValueError):
+        validate_evidence(data, "0.3.1", NOW)
+
+
 @pytest.mark.parametrize("version", ["0.3.2", "1.0.0"])
 def test_later_releases_retain_full_three_cloud_lifecycle_gate(version):
     data, _ = evidence_data()

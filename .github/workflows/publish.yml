@@ -26,7 +26,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Locate temporary release artifacts
-        run: printf 'RELEASE_OUTPUT=%s\nEVIDENCE=%s\n' "$RUNNER_TEMP/pig-release" "$RUNNER_TEMP/pig-acceptance.json" >> "$GITHUB_ENV"
+        run: printf 'RELEASE_OUTPUT=%s\nEVIDENCE=%s\nRELEASE_TOOLS=%s\n' "$RUNNER_TEMP/pig-release" "$RUNNER_TEMP/pig-acceptance.json" "$RUNNER_TEMP/pig-release-tools" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           version: '0.8.22'
@@ -36,10 +36,12 @@ jobs:
       - name: Read reviewed evidence before selecting the accepted source
         id: evidence
         run: |
-          uv sync --frozen
-          uv run python -c 'import os; from pig_supervisor.models import stable_version; stable_version(os.environ["VERSION"])'
+          # Keep release policy and tooling at the reviewed workflow commit.
+          git worktree add --detach "$RELEASE_TOOLS" "$GITHUB_SHA"
+          uv sync --frozen --project "$RELEASE_TOOLS"
+          uv run --frozen --project "$RELEASE_TOOLS" python -c 'import os; from pig_supervisor.models import stable_version; stable_version(os.environ["VERSION"])'
           cp "releases/acceptance/$VERSION.json" "$EVIDENCE"
-          uv run pig-release evidence --version "$VERSION" --evidence "$EVIDENCE"
+          uv run --frozen --project "$RELEASE_TOOLS" pig-release evidence --version "$VERSION" --evidence "$EVIDENCE"
       - name: Select exact accepted source without moving a release tag
         env:
           SOURCE_COMMIT: ${{ steps.evidence.outputs.source_commit }}
@@ -49,7 +51,6 @@ jobs:
             test "$(git rev-parse "refs/tags/v$VERSION^{commit}")" = "$SOURCE_COMMIT"
           fi
           git checkout --detach "$SOURCE_COMMIT"
-          uv sync --frozen
       - name: Verify anonymous runtime images and their deployment contract
         env:
           ANALYZER_IMAGE: ${{ steps.evidence.outputs.analyzer_image }}
@@ -66,10 +67,10 @@ jobs:
           docker run --rm "$ANALYZER_IMAGE" deployment-capabilities > "$RELEASE_OUTPUT/worker-capabilities.json"
       - name: Package only accepted immutable artifacts
         run: |
-          uv run pig-release package --version "$VERSION" --evidence "$EVIDENCE" --requirements "releases/requirements/$VERSION.json" --capabilities "$RELEASE_OUTPUT/worker-capabilities.json" --output "$RELEASE_OUTPUT"
+          uv run --frozen --project "$RELEASE_TOOLS" pig-release package --version "$VERSION" --evidence "$EVIDENCE" --requirements "releases/requirements/$VERSION.json" --capabilities "$RELEASE_OUTPUT/worker-capabilities.json" --output "$RELEASE_OUTPUT"
       - name: Refuse replacement of published chart bytes
         id: charts
-        run: uv run pig-release chart-status --version "$VERSION" --evidence "$EVIDENCE" --requirements "releases/requirements/$VERSION.json" --output "$RELEASE_OUTPUT"
+        run: uv run --frozen --project "$RELEASE_TOOLS" pig-release chart-status --version "$VERSION" --evidence "$EVIDENCE" --requirements "releases/requirements/$VERSION.json" --output "$RELEASE_OUTPUT"
       - name: Publish versioned OCI chart packages
         env:
           PUBLISH_SUPERVISOR: ${{ steps.charts.outputs.pig-supervisor }}
@@ -91,7 +92,7 @@ jobs:
             helm pull "oci://ghcr.io/promptless/charts/$chart" --version "$VERSION" --destination "$RELEASE_OUTPUT/anonymous"
             cmp "$RELEASE_OUTPUT/$chart-$VERSION.tgz" "$RELEASE_OUTPUT/anonymous/$chart-$VERSION.tgz"
           done
-          uv run pig-release assemble --version "$VERSION" --evidence "$EVIDENCE" --requirements "releases/requirements/$VERSION.json" --output "$RELEASE_OUTPUT"
+          uv run --frozen --project "$RELEASE_TOOLS" pig-release assemble --version "$VERSION" --evidence "$EVIDENCE" --requirements "releases/requirements/$VERSION.json" --output "$RELEASE_OUTPUT"
       - name: Publish immutable source tag and checksummed module archive
         env:
           SOURCE_COMMIT: ${{ steps.evidence.outputs.source_commit }}
@@ -114,8 +115,8 @@ jobs:
           sha256sum --check SHA256SUMS
       - name: Open an immutable catalog promotion draft
         run: |
-          # Promotion tooling comes from reviewed main, even when retrying an older accepted source.
+          # Promotion data starts from main; tooling stays at the reviewed workflow commit.
           git switch --detach origin/main
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          uv run pig-release promote-draft --version "$VERSION" --manifest "$RELEASE_OUTPUT/release.json"
+          uv run --frozen --project "$RELEASE_TOOLS" pig-release promote-draft --version "$VERSION" --manifest "$RELEASE_OUTPUT/release.json"

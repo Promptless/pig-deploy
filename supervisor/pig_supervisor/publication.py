@@ -26,6 +26,8 @@ REPO = "https://github.com/Promptless/pig-deploy"
 CHARTS = ("pig-supervisor", "pig-trace-analyzer")
 INITIAL_RELEASE = "0.3.0"
 INSTALL_CHECKS = frozenset({"install", "canonicalAcceptance"})
+AWS_PATCH_RELEASE = "0.3.1"
+PATCH_CHECKS = INSTALL_CHECKS | {"patchUpdate"}
 CHECKS = frozenset(
     {
         "install",
@@ -47,7 +49,7 @@ class CloudAcceptance(Contract):
 
     @model_validator(mode="after")
     def complete(self):
-        if not self.evidence or not set(self.evidence) <= CHECKS:
+        if not self.evidence or not set(self.evidence) <= CHECKS | PATCH_CHECKS:
             raise ValueError("cloud acceptance must contain only recognized checks")
         if not all(re.fullmatch(r"https://[^\s]+", value) for value in self.evidence.values()):
             raise ValueError("every acceptance check needs a public sanitized evidence URL")
@@ -69,10 +71,11 @@ class AcceptanceEvidence(Contract):
 
     @model_validator(mode="after")
     def release_coverage(self):
-        """Scope the first release to AWS installation; retain later lifecycle gates."""
+        """Scope the first installation and patch release to their AWS acceptance."""
         initial = self.version == INITIAL_RELEASE
-        required_checks = INSTALL_CHECKS if initial else CHECKS
-        required_clouds = {"eks"} if initial else {"eks", "aks", "gke"}
+        aws_patch = self.version == AWS_PATCH_RELEASE
+        required_checks = INSTALL_CHECKS if initial else PATCH_CHECKS if aws_patch else CHECKS
+        required_clouds = {"eks"} if initial or aws_patch else {"eks", "aks", "gke"}
         for name in ("eks", "aks", "gke"):
             cloud = getattr(self, name)
             if cloud is None:

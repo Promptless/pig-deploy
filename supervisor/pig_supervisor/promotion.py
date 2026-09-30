@@ -112,7 +112,7 @@ def promote_draft(root: Path, manifest: Path) -> str:
         body = Path(directory) / "body.md"
         body.write_text(
             f"Promote the accepted PIG {version} release. Both runtime images, chart packages, and source archive "
-            "passed anonymous access checks. Three-cloud acceptance evidence is in "
+            "passed anonymous access checks. Release-specific acceptance evidence is in "
             f"releases/acceptance/{version}.json. Merging this catalog entry makes the release eligible for "
             "automatic updates, including major upgrades.\n"
         )

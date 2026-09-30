@@ -16,6 +16,7 @@ from pig_supervisor.models import Requirements
 from pig_supervisor.publication import (
     CHECKS,
     INSTALL_CHECKS,
+    PATCH_CHECKS,
     Registry,
     assemble,
     chart_publication_needed,
@@ -78,7 +79,31 @@ def test_initial_release_cannot_omit_aws_or_advertise_untested_rollback():
     assert validate_evidence(data, "0.3.0", NOW).rollback_to == ["c" * 64]
 
 
-@pytest.mark.parametrize("version", ["0.3.1", "1.0.0"])
+@pytest.mark.parametrize("check", sorted(PATCH_CHECKS))
+def test_aws_patch_release_requires_install_pipeline_and_real_patch_update(check):
+    data, _ = evidence_data()
+    data["version"] = "0.3.1"
+    data["eks"]["evidence"]["patchUpdate"] = "https://example.com/acceptance/patch-update"
+    assert validate_evidence(data, "0.3.1", NOW).version == "0.3.1"
+    with pytest.raises(ValueError, match="fourteen days"):
+        validate_evidence(data, "0.3.1", NOW + timedelta(days=15))
+    del data["eks"]["evidence"][check]
+    with pytest.raises(ValueError, match="required checks"):
+        validate_evidence(data, "0.3.1", NOW)
+
+
+def test_aws_patch_release_cannot_advertise_untested_rollback():
+    data, _ = evidence_data()
+    data["version"] = "0.3.1"
+    data["eks"]["evidence"]["patchUpdate"] = "https://example.com/acceptance/patch-update"
+    data["rollbackTo"] = ["c" * 64]
+    with pytest.raises(ValueError, match="recovery acceptance"):
+        validate_evidence(data, "0.3.1", NOW)
+    data["eks"]["evidence"]["recovery"] = "https://example.com/acceptance/recovery"
+    assert validate_evidence(data, "0.3.1", NOW).rollback_to == ["c" * 64]
+
+
+@pytest.mark.parametrize("version", ["0.3.2", "1.0.0"])
 def test_later_releases_retain_full_three_cloud_lifecycle_gate(version):
     data, _ = evidence_data()
     data["version"] = version

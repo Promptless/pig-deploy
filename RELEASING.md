@@ -1,11 +1,11 @@
 # Release operations
 
-The first source candidate is 0.3.0. The stable catalog is empty until an accepted
-release is published and its catalog promotion is reviewed. Local tests are not
-installation acceptance. Version 0.3.0 requires a real AWS clean installation and
-canonical pipeline acceptance before publication. Azure and GCP support is
-experimental; their native adapters and deployment modules are not cloud-validated
-by the first release.
+The stable catalog is empty until an accepted release is published and its catalog
+promotion is reviewed. Local tests are not installation acceptance. Versions 0.3.0
+and 0.3.1 are AWS-only releases requiring a real AWS clean installation and canonical
+pipeline acceptance. Version 0.3.1 also requires the real unattended 0.3.0 to 0.3.1
+patch update. Azure and GCP support remains experimental; these releases do not
+establish cloud validation for their native adapters or deployment modules.
 
 ## Artifact and trust boundary
 
@@ -45,25 +45,27 @@ check can pass. No customer secret belongs in this repository or its evidence.
 2. With explicit publication authorization, run the supervisor candidate workflow
    on `main`. Record both image digests and the exact public source commit. The
    supervisor image embeds that commit as its OCI revision and reports its version.
-3. For 0.3.0, install the exact candidate into a fresh EKS namespace using S3,
+3. For 0.3.0 and 0.3.1, install the exact candidate into a fresh EKS namespace using S3,
    verified PostgreSQL TLS, native workload identity, and the public supervisor
    path. Prove enrollment, a canonical object written and readable at its exact
    native URI, successful analysis of the matching fingerprint, hosted
    acknowledgement, and the matching trace and analysis in the Dashboard.
    Zero findings is a successful analysis. An image pull, HTTP 200, healthy Pods,
    or green CI does not establish this result.
+   For 0.3.1, also complete the [AWS unattended patch-update test](catalog/testing/aws-updates/README.md)
+   and prove a fresh trace completes the same pipeline after the upgrade.
 4. Add `releases/acceptance/VERSION.json` in a reviewed PR. Its shape is generated
    in [schemas/acceptance.json](schemas/acceptance.json). Supply `version`,
    `sourceCommit`, exact `analyzerImage`/`supervisorImage`, `requirementsDigest`,
    optional `rollbackTo`, and an `eks` record with `testedAt` and an `evidence`
-   map containing `install` and `canonicalAcceptance`.
+   map containing `install` and `canonicalAcceptance`, plus `patchUpdate` for 0.3.1.
 
-   For 0.3.0, `aks` and `gke` reports are optional experimental evidence. Any
-   supplied report must cover both checks and meet the same freshness and URL
+   For 0.3.0 and 0.3.1, `aks` and `gke` reports are optional experimental evidence. Any
+   supplied report must cover that version's required checks and meet the same freshness and URL
    rules. Additional lifecycle checks may be recorded when actually tested.
    A nonempty `rollbackTo` requires a `recovery` report for every required cloud.
 
-   The AWS installation exception applies only to 0.3.0. Later versions retain
+   The AWS-only exception applies only to 0.3.0 and 0.3.1. Later versions retain
    the EKS, AKS, and GKE gate with all nine checks until a reviewed policy change:
 
    ```text
@@ -119,6 +121,10 @@ operator's final authorization gate.
 The workflow selects the accepted commit, checks any existing tag points there,
 then anonymously pulls both runtime images. It verifies supervisor source/version
 and executes the analyzer capability command before packaging either chart.
+Release policy and publication tooling run from the reviewed workflow commit;
+charts, requirements, CRDs, and the source archive come from the accepted source
+commit. This lets reviewed release-policy changes apply without rebuilding or
+relabeling the accepted runtime images.
 Only absent chart versions are pushed. Existing versions must match the exact
 package bytes, allowing a failed anonymous-access step to be retried after an
 administrator fixes package visibility.
@@ -136,6 +142,10 @@ merging. If PR creation is interrupted after the branch push, rerun publication:
 it verifies the existing manifest bytes, digest, and reachable immutable commit,
 then creates or locates the PR without rewriting the branch. A mismatched branch
 or closed, unmerged PR requires operator review.
+If organization policy blocks Actions from creating PRs, the operator can open a
+draft PR from the published `release/catalog-VERSION` branch to `main`, then rerun
+publication. The retry verifies the branch and reuses that PR; organization-wide
+Actions permissions do not need to change.
 Merging makes the release eligible for automatic updates, including
 major versions. Do not squash away or delete the manifest commit referenced by
 its URL. Keep releases, tags, and those commits reachable and protected.
@@ -150,13 +160,15 @@ migration compatibility, and bounded maintenance failures. The credential-free
 [Kubernetes CI suite](CI.md) also exercises real Helm install/upgrade, process
 handoff, admission, status conflicts, SSA, and RBAC in disposable kind clusters.
 
-For 0.3.0, required live evidence covers a clean AWS installation, verified
+For 0.3.0 and 0.3.1, required live evidence covers a clean AWS installation, verified
 PostgreSQL TLS and S3 access through workload identity, and the full host pipeline
 through Dashboard confirmation. Both runtime images and charts must be anonymously
 pullable, and publication and stable activation still require review of the
 concrete artifacts and evidence.
+Version 0.3.1 additionally requires the real AWS patch upgrade and fresh pipeline
+acceptance after that upgrade.
 
-This first-release gate does not establish minor/major upgrade behavior,
+These AWS release gates do not establish minor/major upgrade behavior,
 pause/pin and rotation in a real cloud, interrupted-migration recovery, long-lived
 workload identity refresh, supervisor self-update with the real analyzer, or
 Azure/GCP installation. Preserve those engineering checks for subsequent release

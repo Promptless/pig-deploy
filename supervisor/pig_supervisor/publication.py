@@ -14,6 +14,7 @@ import tempfile
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 
 import httpx
 import yaml
@@ -58,6 +59,19 @@ class CloudAcceptance(Contract):
         return self
 
 
+class OwnerSignOff(Contract):
+    approved_by: str = Field(pattern=r"\S")
+    approved_at: datetime
+    scope: Literal["aws-only"]
+    statement: str = Field(pattern=r"\S")
+
+    @model_validator(mode="after")
+    def timezone_required(self):
+        if self.approved_at.tzinfo is None:
+            raise ValueError("approvedAt requires a timezone")
+        return self
+
+
 class AcceptanceEvidence(Contract):
     version: str
     source_commit: str = Field(pattern=r"^[a-f0-9]{40}$")
@@ -65,15 +79,24 @@ class AcceptanceEvidence(Contract):
     supervisor_image: Image
     requirements_digest: Digest
     rollback_to: list[Digest] = Field(default_factory=list)
-    eks: CloudAcceptance
+    eks: CloudAcceptance | None = None
     aks: CloudAcceptance | None = None
     gke: CloudAcceptance | None = None
+    owner_sign_off: OwnerSignOff | None = None
 
     @model_validator(mode="after")
     def release_coverage(self):
         """Scope the first installation and patch release to their AWS acceptance."""
         initial = self.version == INITIAL_RELEASE
         aws_patch = self.version == AWS_PATCH_RELEASE
+        if self.owner_sign_off is not None:
+            if not aws_patch:
+                raise ValueError("owner sign-off is permitted only for AWS-only 0.3.1")
+            if any(cloud is not None for cloud in (self.eks, self.aks, self.gke)):
+                raise ValueError("owner sign-off must not be presented as cloud test evidence")
+            if self.rollback_to:
+                raise ValueError("owner sign-off cannot advertise tested rollback paths")
+            return self
         required_checks = INSTALL_CHECKS if initial else PATCH_CHECKS if aws_patch else CHECKS
         required_clouds = {"eks"} if initial or aws_patch else {"eks", "aks", "gke"}
         for name in ("eks", "aks", "gke"):
@@ -99,6 +122,11 @@ def validate_evidence(data: dict, version: str, now: datetime) -> AcceptanceEvid
         raise ValueError("analyzer must use the worker image repository")
     if not evidence.supervisor_image.startswith("ghcr.io/promptless/pig-supervisor@"):
         raise ValueError("supervisor must use its own image repository")
+    if (
+        evidence.owner_sign_off is not None
+        and not now - timedelta(days=14) <= evidence.owner_sign_off.approved_at <= now
+    ):
+        raise ValueError("owner sign-off must be from the last fourteen days")
     for cloud in (evidence.eks, evidence.aks, evidence.gke):
         if cloud is not None and not now - timedelta(days=14) <= cloud.tested_at <= now:
             raise ValueError("acceptance evidence must be from the last fourteen days")

@@ -1,0 +1,14 @@
+{
+  "version": "0.3.1",
+  "sourceCommit": "9158da95ff05536133e05d65c47a9271dc855bae",
+  "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:ba51c731cca00cbaa6075577995ca795048d5e0a041b1b4503a554c159546962",
+  "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:86038bc595bc427e0b73f7335d057fa3b5655a23e90cfa188895dec95d2a1627",
+  "requirementsDigest": "355c29437b278391c55c98569439adac14cf7aa505ae3870a11d17b5fcb25c3c",
+  "rollbackTo": [],
+  "ownerSignOff": {
+    "approvedBy": "adit-chandra",
+    "approvedAt": "2026-09-30T19:09:27Z",
+    "scope": "aws-only",
+    "statement": "The release owner explicitly approved AWS-only publication and stable promotion of these 0.3.1 artifacts using owner sign-off in place of stored clean-install, canonical-pipeline, and 0.3.0-to-0.3.1 upgrade reports. This approval does not assert report-backed acceptance or Azure/GCP validation."
+  }
+}

@@ -2,9 +2,10 @@
 
 The stable catalog is empty until an accepted release is published and its catalog
 promotion is reviewed. Local tests are not installation acceptance. Versions 0.3.0
-and 0.3.1 are AWS-only releases requiring a real AWS clean installation and canonical
-pipeline acceptance. Version 0.3.1 also requires the real unattended 0.3.0 to 0.3.1
-patch update. Azure and GCP support remains experimental; these releases do not
+and 0.3.1 are AWS-only releases. Report-backed acceptance covers a real AWS clean
+installation and canonical pipeline, plus the unattended 0.3.0 to 0.3.1 patch update
+for 0.3.1. Version 0.3.1 may instead use the explicit owner sign-off described below.
+Azure and GCP support remains experimental; these releases do not
 establish cloud validation for their native adapters or deployment modules.
 
 ## Artifact and trust boundary
@@ -78,11 +79,21 @@ check can pass. No customer secret belongs in this repository or its evidence.
    content, installation tokens, DSNs, or private infrastructure identifiers.
    A reviewer checks report contents. The workflow validates structure, binding,
    and freshness; it does not independently execute or audit the evidence URLs.
+
+   **Owner sign-off for 0.3.1:** the release owner may explicitly approve AWS-only
+   publication and stable promotion in place of stored test reports. Retain all
+   exact source, image, and requirements identities, omit the cloud reports, and
+   supply `ownerSignOff` with `approvedBy`, timezone-aware `approvedAt`,
+   `scope: "aws-only"`, and a `statement` explaining the approval. This is an
+   approval record, not a claim that report-backed testing was verified. It must
+   not contain `testedAt`, invented report URLs, or advertised rollback paths.
+   The exception applies only to 0.3.1; image execution, capabilities, artifact
+   integrity, anonymous access, and catalog review remain mandatory.
 5. Compute `requirementsDigest` as SHA-256 of the requirements model's canonical
    JSON: parse `releases/requirements/VERSION.json` with `Requirements`, dump with
    aliases, then serialize with sorted keys and compact separators. This internal
    evidence digest is 64 lowercase hex characters without the `sha256:` prefix.
-   Acceptance expires after 14 days. `rollbackTo` contains bare manifest digests
+   Test evidence and owner sign-off expire after 14 days. `rollbackTo` contains bare manifest digests
    for rollback paths actually included in recovery acceptance.
 
 ### Schema-3 candidate
@@ -160,13 +171,14 @@ migration compatibility, and bounded maintenance failures. The credential-free
 [Kubernetes CI suite](CI.md) also exercises real Helm install/upgrade, process
 handoff, admission, status conflicts, SSA, and RBAC in disposable kind clusters.
 
-For 0.3.0 and 0.3.1, required live evidence covers a clean AWS installation, verified
+For 0.3.0 and report-backed 0.3.1 acceptance, live evidence covers a clean AWS installation, verified
 PostgreSQL TLS and S3 access through workload identity, and the full host pipeline
 through Dashboard confirmation. Both runtime images and charts must be anonymously
 pullable, and publication and stable activation still require review of the
 concrete artifacts and evidence.
-Version 0.3.1 additionally requires the real AWS patch upgrade and fresh pipeline
-acceptance after that upgrade.
+Report-backed 0.3.1 acceptance additionally covers the real AWS patch upgrade and
+fresh pipeline acceptance after that upgrade. An owner sign-off substitutes an
+explicit release decision for these stored reports; it does not prove their results.
 
 These AWS release gates do not establish minor/major upgrade behavior,
 pause/pin and rotation in a real cloud, interrupted-migration recovery, long-lived

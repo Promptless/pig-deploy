@@ -10,7 +10,7 @@
 # PIG deployment
 
 Deploy Promptless Instruction Governance into an existing EKS cluster. The 0.3.0
-release targets AWS clean installations; Azure/AKS and GCP/GKE support is experimental.
+and 0.3.1 releases target AWS; Azure/AKS and GCP/GKE support is experimental.
 Terraform provisions the customer database, native object storage, network access,
 workload identity, and recovery settings. A namespace-scoped supervisor installs
 and updates the analyzer from immutable releases.
@@ -25,13 +25,12 @@ source. Analyzer application source is maintained separately.
 - [Deployment contract](CONTRACT.md): release policy, credentials, recovery,
   capacity acknowledgement, and acceptance.
 - [Release operations](RELEASING.md): artifact integrity, publication gates, and
-  engineering validation still required before the first release.
+  release acceptance.
 - [Customer guides](https://promptless.ai/docs/governance/deploy-the-worker/plan-your-deployment/).
 
-The source prepares the **0.3.1 upgrade candidate** for the
-[AWS unattended update test](catalog/testing/aws-updates/README.md).
-No installable release is implied
-by this checkout: `catalog/stable.json` starts empty. A release becomes eligible
+The [stable catalog](catalog/stable.json) lists published releases. Version 0.3.1
+uses an explicit [AWS-only owner sign-off](releases/acceptance/0.3.1.json) in place
+of stored acceptance reports. A release becomes eligible
 for automatic updates only after accepted images and charts are publicly
 available and its reviewed catalog promotion is merged. Do not use the existing
 0.2.0 worker image for the supervisor contract.

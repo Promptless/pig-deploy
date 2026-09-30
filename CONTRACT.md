@@ -3,9 +3,10 @@
 ## Release support
 
 The 0.3.0 release requires a verified clean installation on AWS/EKS and canonical
-pipeline acceptance through the Dashboard. Azure/AKS and GCP/GKE are experimental.
-The lifecycle behavior below is the implementation contract; this first release's
-cloud evidence does not certify upgrades, controller self-update, credential
+pipeline acceptance through the Dashboard. Version 0.3.1 permits explicit AWS-only
+owner sign-off in place of stored test reports. Azure/AKS and GCP/GKE are experimental.
+The lifecycle behavior below is the implementation contract; owner sign-off does
+not establish report-backed validation of upgrades, controller self-update, credential
 rotation, interrupted-migration recovery, or long-lived identity refresh. See
 [release acceptance](RELEASING.md) for the evidence required by each release.
 
@@ -133,10 +134,11 @@ Otherwise choose a compatible forward repair release. A running migration cannot
 be replaced by a repair release until it terminates. Database or object recovery
 is an operator action, never an automatic destructive restore.
 
-The 0.3.0 release targets schema revision 2, which preserves trace data while
-removing the duplicate location column and synchronization objects. Its
-`destructiveMigration: false` declaration does not permit restarting schema-1
-images. Use a schema-2-compatible image or forward repair after migration.
+The 0.3.0 and 0.3.1 releases target schema revision 3, which adds instruction-source
+provenance and includes the earlier native-location migration that preserves trace
+data while removing the duplicate location column and synchronization objects.
+Their `destructiveMigration: false` declaration does not permit restarting older
+images. Use a schema-3-compatible image or forward repair after migration.
 
 ## Release-specific confirmation
 

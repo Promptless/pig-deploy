@@ -2,8 +2,9 @@
 
 Create a named analyzer installation in Promptless Settings and deliver its
 credential through `secrets.existingSecretName` and `secrets.installTokenKey`.
-The analyzer and migration Job resolve the installation identity from this
-credential. `instructionHub.runtimeBaseUrl` defaults to
+The analyzer resolves its installation identity from this credential. The migration
+Job uses database credentials and needs no hosted connection.
+`instructionHub.runtimeBaseUrl` defaults to
 `https://api.gopromptless.ai`; override it only for another Promptless environment.
 Credential rotation immediately revokes the previous credential. Update the
 external Secret and restart the analyzer with the replacement credential.
@@ -33,3 +34,12 @@ When exposing trace uploads through ingress-nginx, set
 `gateway.annotations.nginx.ingress.kubernetes.io/proxy-body-size` to `"256m"`
 to match the worker's default request limit. Configure equivalent limits when
 using another ingress controller. See [ingress-nginx request limits](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#custom-max-body-size).
+
+For separate database roles, set `secrets.migrationPostgresDsnKey` to the owner's
+key in the existing Secret. Only the migration Job receives that credential;
+`secrets.customerPostgresDsnKey` supplies application access. Both DSNs require
+`sslmode=verify-full`. Use `instructionHub.postgresCaConfigMapName` and
+`instructionHub.postgresCaConfigMapKey` to mount a private CA.
+
+The chart uses `/readyz` for storage readiness and `/healthz` for process liveness.
+See [storage operations](../../STORAGE.md) for permissions and recovery.

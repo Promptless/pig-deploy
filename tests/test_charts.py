@@ -16,8 +16,6 @@ def worker_values() -> dict[str, object]:
     return {
         "image": {"digest": DIGEST},
         "instructionHub": {
-            "runtimeBaseUrl": "https://runtime.example.com",
-            "deploymentInstanceId": "test",
             "configHash": "test",
             "traceObjectS3Bucket": "acme-traces",
         },
@@ -57,7 +55,7 @@ def render(chart, values, tmp_path, release="acme"):
 def test_migration_job_name_reserves_room_for_suffix(worker_values, tmp_path, release, override):
     if override:
         worker_values["fullnameOverride"] = override
-    docs = render("instruction-hub-worker", worker_values, tmp_path, release)
+    docs = render("pig-trace-analyzer", worker_values, tmp_path, release)
     job = next(doc for doc in docs if doc["kind"] == "Job")
     deployment = next(doc for doc in docs if doc["kind"] == "Deployment")
     name = job["metadata"]["name"]
@@ -82,15 +80,13 @@ def test_migration_job_name_reserves_room_for_suffix(worker_values, tmp_path, re
 )
 def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_path):
     docs = render(
-        "instruction-hub-worker",
+        "pig-trace-analyzer",
         {
             "image": {"digest": DIGEST},
             "serviceAccount": {"create": False, "name": "pig-analyzer"},
             "podLabels": {"azure.workload.identity/use": "true"},
             "nodeSelector": {"iam.gke.io/gke-metadata-server-enabled": "true"},
             "instructionHub": {
-                "runtimeBaseUrl": "https://runtime.example.com",
-                "deploymentInstanceId": "test",
                 "configHash": "test",
                 "storageBackend": backend,
                 "postgresCaConfigMapName": "postgres-ca",
@@ -111,6 +107,10 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
         container = template["spec"]["containers"][0]
         env = {e["name"]: e for e in container["env"]}
         assert expected in env
+        assert env["INSTRUCTION_HUB_RUNTIME_BASE_URL"]["value"] == "https://api.gopromptless.ai"
+        assert "INSTRUCTION_HUB_DEPLOYMENT_INSTANCE_ID" not in env
+        assert "INSTRUCTION_HUB_DEPLOYMENT_NAME" not in env
+        assert env["INSTRUCTION_HUB_INSTALL_TOKEN"]["valueFrom"]["secretKeyRef"]["name"] == "pig-credentials"
         assert env["PGSSLROOTCERT"]["value"] == "/etc/pig/postgres-ca/ca.pem"
         assert container["image"].endswith("@" + DIGEST)
         assert any(v["name"] == "postgres-ca" for v in template["spec"]["volumes"])
@@ -120,11 +120,82 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
     assert job["spec"]["backoffLimit"] == 0
 
 
+def test_manual_runtime_override_reaches_analyzer_and_migration(worker_values, tmp_path):
+    worker_values["instructionHub"]["runtimeBaseUrl"] = "https://staging.example.com"
+    docs = render("pig-trace-analyzer", worker_values, tmp_path)
+    for resource in docs:
+        if resource["kind"] not in {"Deployment", "Job"}:
+            continue
+        env = {entry["name"]: entry for entry in resource["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert env["INSTRUCTION_HUB_RUNTIME_BASE_URL"]["value"] == "https://staging.example.com"
+
+
+@pytest.mark.parametrize("activation_at", ["", "2026-09-21T00:00:00Z"])
+@pytest.mark.parametrize("authentication", ["api_key", "aws_sigv4"])
+def test_manual_model_access_without_repository_configuration(
+    activation_at: str, authentication: str, tmp_path: Path
+) -> None:
+    """Analysis and catalog-only operation receive model access and writable mirrors."""
+    model = {
+        "provider": "openai" if authentication == "api_key" else "aws_bedrock",
+        "authentication": authentication,
+        "baseUrl": "https://api.openai.com/v1"
+        if authentication == "api_key"
+        else "https://bedrock-mantle.us-east-1.api.aws/v1",
+        "model": "test-model",
+    }
+    docs = render(
+        "pig-trace-analyzer",
+        {
+            "image": {"digest": DIGEST},
+            "instructionHub": {
+                "configHash": "test",
+                "traceObjectS3Bucket": "acme-traces",
+                "analysis": {
+                    "activationAt": activation_at,
+                    "catalogEnabled": not activation_at,
+                    "mirrorRoot": "/var/lib/instruction-hub/custom-mirrors",
+                    "modelApi": model,
+                },
+            },
+            "secrets": {
+                "create": True,
+                "installToken": "test-install-token",
+                "customerPostgresDsn": "test-postgres-dsn",
+                "analysisModelApiKey": "test-model-key" if authentication == "api_key" else "",
+            },
+        },
+        tmp_path,
+    )
+    deployment = next(doc for doc in docs if doc["kind"] == "Deployment")
+    pod = deployment["spec"]["template"]["spec"]
+    container = pod["containers"][0]
+    env = {entry["name"]: entry for entry in container["env"]}
+    assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_NAME"]["value"] == "test-model"
+    assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_AUTHENTICATION"]["value"] == authentication
+    assert env["INSTRUCTION_HUB_ANALYSIS_MIRROR_ROOT"]["value"] == "/var/lib/instruction-hub/custom-mirrors"
+    assert ("INSTRUCTION_HUB_ANALYSIS_ACTIVATION_AT" in env) is bool(activation_at)
+    assert not any(name.startswith("INSTRUCTION_HUB_ANALYSIS_REPOSITORY_") for name in env)
+    assert {"name": "analysis-mirrors", "mountPath": "/var/lib/instruction-hub"} in container["volumeMounts"]
+    assert {"name": "analysis-mirrors", "emptyDir": {}} in pod["volumes"]
+    secret = next(doc for doc in docs if doc["kind"] == "Secret")
+    expected_keys = {"install-token", "customer-postgres-dsn"}
+    if authentication == "api_key":
+        expected_keys.add("analysis-model-api-key")
+        assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY"]["valueFrom"]["secretKeyRef"] == {
+            "name": secret["metadata"]["name"],
+            "key": "analysis-model-api-key",
+        }
+    else:
+        assert "INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY" not in env
+    assert set(secret["stringData"]) == expected_keys
+
+
 def test_manual_default_migration_uses_preexisting_shared_account(
     worker_values: dict[str, object], tmp_path: Path
 ) -> None:
     """Pre-install migration must use the same external identity as the analyzer."""
-    docs = render("instruction-hub-worker", worker_values, tmp_path)
+    docs = render("pig-trace-analyzer", worker_values, tmp_path)
 
     assert not any(doc["kind"] == "ServiceAccount" for doc in docs)
     workloads = [doc for doc in docs if doc["kind"] in {"Deployment", "Job"}]
@@ -141,7 +212,7 @@ def test_manual_rejects_chart_created_identity_before_migration(
     worker_values["serviceAccount"] = {"create": True, "name": "pig-analyzer"}
 
     with pytest.raises(subprocess.CalledProcessError) as error:
-        render("instruction-hub-worker", worker_values, tmp_path)
+        render("pig-trace-analyzer", worker_values, tmp_path)
 
     assert "pre-existing shared ServiceAccount" in (error.value.stdout or "") + (error.value.stderr or "")
 
@@ -151,7 +222,7 @@ def test_manual_can_create_identity_with_external_migrations(worker_values: dict
     worker_values["serviceAccount"] = {"create": True, "name": "custom-analyzer"}
     worker_values["migrationJob"] = {"enabled": False}
 
-    docs = render("instruction-hub-worker", worker_values, tmp_path)
+    docs = render("pig-trace-analyzer", worker_values, tmp_path)
 
     assert not any(doc["kind"] == "Job" for doc in docs)
     account = next(doc for doc in docs if doc["kind"] == "ServiceAccount")
@@ -165,7 +236,7 @@ def test_manual_rejects_separate_migration_identity(worker_values: dict[str, obj
     worker_values["migrationJob"] = {"serviceAccountName": "different-account"}
 
     with pytest.raises(subprocess.CalledProcessError):
-        render("instruction-hub-worker", worker_values, tmp_path)
+        render("pig-trace-analyzer", worker_values, tmp_path)
 
 
 def test_supervisor_grants_no_identity_secret_or_rbac_writes(tmp_path):

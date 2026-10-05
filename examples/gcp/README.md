@@ -1,5 +1,9 @@
 # Existing GKE cluster
 
+This cloud is experimental in 0.3.0. Its deployment module and native storage
+adapter are implemented, but the first release validates AWS clean installation
+and canonical acceptance. See [release operations](../../RELEASING.md).
+
 Follow the [shared workflow](../README.md) with Google provider 6.49.0. Supply an
 existing project with Cloud SQL, IAM, and Storage APIs enabled, a GKE workload
 identity pool, and a VPC with private services access and its allocated range
@@ -36,7 +40,8 @@ The Cloud SQL instance uses Google-managed regional CA service. Deliver its
 regional CA bundle, then use both output `host` (certificate DNS identity) and
 `hostaddr` (private IP) in the libpq DSN with `sslmode=verify-full`. This avoids
 relying on an IP certificate name. Confirm actual certificate/DNS behavior in the
-cloud acceptance environment before publication.
+cloud acceptance environment before claiming GCP acceptance or promoting GCP
+support beyond experimental.
 
 State uses an existing encrypted, private, versioned GCS bucket with native
 locking and the configured state CMEK. State and application CMEK grants are

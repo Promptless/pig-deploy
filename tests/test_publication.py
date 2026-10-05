@@ -10,10 +10,13 @@ from pathlib import Path
 
 import httpx
 import pytest
+import yaml
 from pig_supervisor.catalog import canonical_digest
 from pig_supervisor.models import Requirements
 from pig_supervisor.publication import (
     CHECKS,
+    INSTALL_CHECKS,
+    PATCH_CHECKS,
     Registry,
     assemble,
     chart_publication_needed,
@@ -32,15 +35,15 @@ def evidence_data(commit="a" * 40):
     data = {
         "version": "0.3.0",
         "sourceCommit": commit,
-        "analyzerImage": "ghcr.io/promptless/instruction-hub-worker@sha256:" + "a" * 64,
+        "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:" + "a" * 64,
         "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:" + "b" * 64,
         "requirementsDigest": canonical_digest(requirements.model_dump(by_alias=True)),
         **{
             cloud: {
                 "testedAt": NOW.isoformat(),
-                "evidence": {check: "https://example.com/acceptance/" + check for check in CHECKS},
+                "evidence": {check: "https://example.com/acceptance/" + check for check in INSTALL_CHECKS},
             }
-            for cloud in ("eks", "aks", "gke")
+            for cloud in ("eks",)
         },
     }
     return data, requirements
@@ -53,8 +56,157 @@ def test_evidence_requires_real_cloud_checks_and_exact_artifacts():
         validate_evidence(data, "0.3.1", NOW)
     with pytest.raises(ValueError):
         validate_evidence(data, "0.3.0", NOW + timedelta(days=15))
-    del data["gke"]["evidence"]["recovery"]
+
+
+@pytest.mark.parametrize("check", sorted(INSTALL_CHECKS))
+def test_initial_release_requires_both_install_and_canonical_acceptance(check):
+    data, _ = evidence_data()
+    del data["eks"]["evidence"][check]
+    with pytest.raises(ValueError, match="required checks"):
+        validate_evidence(data, "0.3.0", NOW)
+
+
+def test_initial_release_cannot_omit_aws_or_advertise_untested_rollback():
+    data, _ = evidence_data()
+    aws = data.pop("eks")
     with pytest.raises(ValueError):
+        validate_evidence(data, "0.3.0", NOW)
+    data["eks"] = aws
+    data["rollbackTo"] = ["c" * 64]
+    with pytest.raises(ValueError, match="recovery acceptance"):
+        validate_evidence(data, "0.3.0", NOW)
+    aws["evidence"]["recovery"] = "https://example.com/acceptance/recovery"
+    assert validate_evidence(data, "0.3.0", NOW).rollback_to == ["c" * 64]
+
+
+@pytest.mark.parametrize("check", sorted(PATCH_CHECKS))
+def test_aws_patch_release_requires_install_pipeline_and_real_patch_update(check):
+    data, _ = evidence_data()
+    data["version"] = "0.3.1"
+    data["eks"]["evidence"]["patchUpdate"] = "https://example.com/acceptance/patch-update"
+    assert validate_evidence(data, "0.3.1", NOW).version == "0.3.1"
+    with pytest.raises(ValueError, match="fourteen days"):
+        validate_evidence(data, "0.3.1", NOW + timedelta(days=15))
+    del data["eks"]["evidence"][check]
+    with pytest.raises(ValueError, match="required checks"):
+        validate_evidence(data, "0.3.1", NOW)
+
+
+def test_aws_patch_release_cannot_advertise_untested_rollback():
+    data, _ = evidence_data()
+    data["version"] = "0.3.1"
+    data["eks"]["evidence"]["patchUpdate"] = "https://example.com/acceptance/patch-update"
+    data["rollbackTo"] = ["c" * 64]
+    with pytest.raises(ValueError, match="recovery acceptance"):
+        validate_evidence(data, "0.3.1", NOW)
+    data["eks"]["evidence"]["recovery"] = "https://example.com/acceptance/recovery"
+    assert validate_evidence(data, "0.3.1", NOW).rollback_to == ["c" * 64]
+
+
+def owner_sign_off_data():
+    data, _ = evidence_data()
+    data["version"] = "0.3.1"
+    del data["eks"]
+    data["ownerSignOff"] = {
+        "approvedBy": "release-owner",
+        "approvedAt": NOW.isoformat(),
+        "scope": "aws-only",
+        "statement": "Approve AWS-only publication in place of stored acceptance reports.",
+    }
+    return data
+
+
+def test_owner_sign_off_accepts_exact_aws_patch_artifacts_without_claiming_tests():
+    data = owner_sign_off_data()
+    accepted = validate_evidence(data, "0.3.1", NOW)
+    assert accepted.eks is None
+    assert accepted.owner_sign_off.approved_by == "release-owner"
+    data["analyzerImage"] = data["supervisorImage"]
+    with pytest.raises(ValueError, match="worker image repository"):
+        validate_evidence(data, "0.3.1", NOW)
+
+
+@pytest.mark.parametrize("version", ["0.3.0", "0.3.2", "1.0.0"])
+def test_owner_sign_off_is_not_a_general_release_bypass(version):
+    data = owner_sign_off_data()
+    data["version"] = version
+    with pytest.raises(ValueError, match="only for AWS-only 0.3.1"):
+        validate_evidence(data, version, NOW)
+
+
+@pytest.mark.parametrize("cloud", ["eks", "aks", "gke"])
+def test_owner_sign_off_cannot_mix_with_test_reports_or_rollback(cloud):
+    data = owner_sign_off_data()
+    reports, _ = evidence_data()
+    data[cloud] = reports["eks"]
+    with pytest.raises(ValueError, match="cloud test evidence"):
+        validate_evidence(data, "0.3.1", NOW)
+    del data[cloud]
+    data["rollbackTo"] = ["c" * 64]
+    with pytest.raises(ValueError, match="tested rollback"):
+        validate_evidence(data, "0.3.1", NOW)
+
+
+@pytest.mark.parametrize("offset", [-1, 15])
+def test_owner_sign_off_requires_recent_approval(offset):
+    with pytest.raises(ValueError, match="fourteen days"):
+        validate_evidence(owner_sign_off_data(), "0.3.1", NOW + timedelta(days=offset))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("approvedBy", " "), ("statement", ""), ("scope", "all-clouds"), ("approvedAt", "2026-09-15T00:00:00")],
+)
+def test_owner_sign_off_requires_explicit_owner_scope_statement_and_timezone(field, value):
+    data = owner_sign_off_data()
+    data["ownerSignOff"][field] = value
+    with pytest.raises(ValueError):
+        validate_evidence(data, "0.3.1", NOW)
+
+
+@pytest.mark.parametrize("version", ["0.3.2", "1.0.0"])
+def test_later_releases_retain_full_three_cloud_lifecycle_gate(version):
+    data, _ = evidence_data()
+    data["version"] = version
+    with pytest.raises(ValueError):
+        validate_evidence(data, version, NOW)
+    for cloud in ("eks", "aks", "gke"):
+        data[cloud] = {
+            "testedAt": NOW.isoformat(),
+            "evidence": {check: "https://example.com/acceptance/" + check for check in CHECKS},
+        }
+    assert validate_evidence(data, version, NOW).version == version
+    for cloud in ("aks", "gke"):
+        report = data.pop(cloud)
+        with pytest.raises(ValueError, match=f"{cloud} acceptance is required"):
+            validate_evidence(data, version, NOW)
+        data[cloud] = None
+        with pytest.raises(ValueError, match=f"{cloud} acceptance is required"):
+            validate_evidence(data, version, NOW)
+        data[cloud] = report
+    del data["gke"]["evidence"]["recovery"]
+    with pytest.raises(ValueError, match="required checks"):
+        validate_evidence(data, version, NOW)
+
+
+@pytest.mark.parametrize("cloud", ["aks", "gke"])
+def test_optional_experimental_cloud_reports_still_require_fresh_complete_evidence(cloud):
+    data, _ = evidence_data()
+    data[cloud] = {"testedAt": (NOW - timedelta(days=15)).isoformat(), "evidence": dict(data["eks"]["evidence"])}
+    with pytest.raises(ValueError, match="fourteen days"):
+        validate_evidence(data, "0.3.0", NOW)
+    data[cloud]["testedAt"] = NOW.isoformat()
+    assert getattr(validate_evidence(data, "0.3.0", NOW), cloud) is not None
+    del data[cloud]["evidence"]["canonicalAcceptance"]
+    with pytest.raises(ValueError, match="required checks"):
+        validate_evidence(data, "0.3.0", NOW)
+
+
+@pytest.mark.parametrize("link", ["http://example.com/report", "https://example.com/private report"])
+def test_acceptance_reports_require_https_links(link):
+    data, _ = evidence_data()
+    data["eks"]["evidence"]["install"] = link
+    with pytest.raises(ValueError, match="public sanitized evidence URL"):
         validate_evidence(data, "0.3.0", NOW)
 
 
@@ -62,16 +214,26 @@ def test_stale_worker_image_cannot_be_relabelled_as_native_release():
     _, requirements = evidence_data()
     with pytest.raises(ValueError, match="worker image"):
         check_capabilities({"storageBackends": ["s3"]}, requirements)
-    check_capabilities(
-        {
-            "controllerProtocol": 1,
-            "schemaRevision": 1,
-            "storageBackends": ["s3", "azureBlob", "gcs"],
-            "commands": ["preflight", "supervised-migrate", "verify", "acceptance"],
-            "capabilities": ["native-storage-v1", "migration-ledger-v1"],
-        },
-        requirements,
-    )
+
+
+@pytest.mark.parametrize("schema_revision", [1, 2, 3, 4])
+@pytest.mark.parametrize("installation_identity", [False, True])
+def test_candidate_requires_schema_3_worker_and_credential_identity(schema_revision, installation_identity):
+    _, requirements = evidence_data()
+    capabilities = {
+        "controllerProtocol": 1,
+        "schemaRevision": schema_revision,
+        "storageBackends": ["s3", "azureBlob", "gcs"],
+        "commands": ["preflight", "supervised-migrate", "verify", "acceptance"],
+        "capabilities": ["native-storage-v1", "migration-ledger-v1"],
+    }
+    if installation_identity:
+        capabilities["capabilities"].append("installation-identity-v1")
+    if schema_revision != 3 or not installation_identity:
+        with pytest.raises(ValueError, match="worker image"):
+            check_capabilities(capabilities, requirements)
+    else:
+        check_capabilities(capabilities, requirements)
 
 
 def test_registry_checks_anonymous_access_and_content_digest():
@@ -96,6 +258,11 @@ def test_real_helm_package_immutable_manifest_and_catalog(tmp_path):
     root, output = tmp_path / "source", tmp_path / "packages"
     root.mkdir()
     shutil.copytree(ROOT / "charts", root / "charts")
+    for chart in (root / "charts").iterdir():
+        metadata_path = chart / "Chart.yaml"
+        metadata = yaml.safe_load(metadata_path.read_text())
+        metadata.update(version="0.3.0", appVersion="0.3.0")
+        metadata_path.write_text(yaml.safe_dump(metadata))
     (root / "catalog").mkdir()
     (root / "catalog/stable.json").write_text('{"schemaVersion":1,"releases":[]}')
     subprocess.run(["git", "init", "-q", str(root)], check=True)
@@ -109,7 +276,7 @@ def test_real_helm_package_immutable_manifest_and_catalog(tmp_path):
     data, requirements = evidence_data(commit)
     evidence = validate_evidence(data, "0.3.0", NOW)
     hashes = package(root, output, evidence, requirements)
-    assert set(hashes) == {"pig-supervisor-0.3.0.tgz", "instruction-hub-worker-0.3.0.tgz", "pig-deploy-0.3.0.tar.gz"}
+    assert set(hashes) == {"pig-supervisor-0.3.0.tgz", "pig-trace-analyzer-0.3.0.tgz", "pig-deploy-0.3.0.tar.gz"}
     (root / "charts/pig-supervisor/untracked-secret").write_text("must never be packaged")
     assert package(root, tmp_path / "repeated", evidence, requirements) == hashes
     with tarfile.open(output / "pig-supervisor-0.3.0.tgz") as archive:
@@ -131,7 +298,7 @@ def test_real_helm_package_immutable_manifest_and_catalog(tmp_path):
 
     release = assemble(root, output, evidence, requirements, Published())
     assert chart_publication_needed(Published(), output, "0.3.0") == dict.fromkeys(
-        ("pig-supervisor", "instruction-hub-worker"), False
+        ("pig-supervisor", "pig-trace-analyzer"), False
     )
     (output / "pig-supervisor-0.3.0.tgz").write_bytes(b"different package")
     with pytest.raises(ValueError, match="cannot be overwritten"):

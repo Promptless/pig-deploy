@@ -1,5 +1,15 @@
 # Deployment contract
 
+## Release support
+
+The 0.3.0 release requires a verified clean installation on AWS/EKS and canonical
+pipeline acceptance through the Dashboard. Version 0.3.1 permits explicit AWS-only
+owner sign-off in place of stored test reports. Azure/AKS and GCP/GKE are experimental.
+The lifecycle behavior below is the implementation contract; owner sign-off does
+not establish report-backed validation of upgrades, controller self-update, credential
+rotation, interrupted-migration recovery, or long-lived identity refresh. See
+[release acceptance](RELEASING.md) for the evidence required by each release.
+
 ## Ownership
 
 Terraform owns cloud database, storage, network, IAM, sizing, and backup settings.
@@ -12,6 +22,13 @@ multiple deployment policies block reconciliation. Separate namespaces can share
 the CRD, so automatic CRD changes must be optional, additive, and within the
 named CRD permissions granted at bootstrap. New capabilities block the release
 until an operator reviews and applies a bootstrap upgrade.
+For changes to required spec fields, follow the
+[operator CRD upgrade procedure](UPGRADING.md).
+
+A contender waits one full Lease duration (five minutes) after first observing
+an existing Lease or observing its latest renewal before taking over. A newly
+started contender begins that wait afresh; another node's wall clock is not
+evidence of Lease expiry.
 
 Name the `PIGDeployment` with at most 54 lowercase letters, digits, or hyphens.
 Start with a letter and end with a letter or digit so its generated Service name
@@ -32,8 +49,32 @@ output supplies PostgreSQL metadata, exactly one native storage block,
 `service_account_annotations`, and `pod_labels`. It contains no credential values.
 Copy only those relevant fields into customer-owned Kubernetes configuration.
 
-Deliver `pig-credentials` with `install-token`, `postgres-dsn`, `model-api-key`,
-and, for private repositories, `repository-token`. The PostgreSQL DSN must use
+Create a named analyzer installation in Promptless Settings and store its credential
+in the Secret referenced by `hosted.installTokenSecretRef`. The analyzer resolves
+its installation identity from that credential before serving or running maintenance
+commands. Replicas, restarts, and credential replacement use the same installation.
+`hosted.runtimeURL` defaults to `https://api.gopromptless.ai`; override it only for
+a different Promptless environment.
+
+Credential rotation in Settings immediately revokes the previous credential.
+Update the customer-managed Secret with the replacement; the supervisor revalidates
+and restarts the analyzer. Hosted access is interrupted until that completes.
+Revoking a credential preserves the installation and its history. Issue a replacement
+for that installation to restore access. PIG does not write customer Secrets.
+
+Configure HTTPS for `endpoint.hostname` through the externally managed ingress
+controller. Set `endpoint.tlsSecretName` when the controller reads a Kubernetes
+TLS Secret. Omit it when the controller uses a certificate configured through
+`endpoint.ingressAnnotations` or its own configuration, such as AWS ALB with ACM.
+The generated Ingress retains the TLS hostname without a Secret reference. The
+operator must provide a valid certificate and an HTTPS listener before enrolling
+hosts; the supervisor does not provision certificates or an ingress controller.
+
+Select instruction repositories in Promptless Settings. The analyzer fetches their
+identities and access credentials from the hosted runtime.
+
+Deliver `pig-credentials` with `install-token` and `postgres-dsn`. Add
+`model-api-key` when the model uses API-key authentication. The PostgreSQL DSN must use
 `sslmode=verify-full`. `storage.postgres.caConfigMapRef` mounts its selected key at
 `/etc/pig/postgres-ca/ca.pem` and sets `PGSSLROOTCERT`. Analyzer and maintenance Jobs
 share the same ServiceAccount, native workload identity, labels, and CA mount.
@@ -93,6 +134,12 @@ Otherwise choose a compatible forward repair release. A running migration cannot
 be replaced by a repair release until it terminates. Database or object recovery
 is an operator action, never an automatic destructive restore.
 
+The 0.3.0 and 0.3.1 releases target schema revision 3, which adds instruction-source
+provenance and includes the earlier native-location migration that preserves trace
+data while removing the duplicate location column and synchronization objects.
+Their `destructiveMigration: false` declaration does not permit restarting older
+images. Use a schema-3-compatible image or forward repair after migration.
+
 ## Release-specific confirmation
 
 Set `spec.release.confirmation.configMapRef` to a customer-owned ConfigMap in the
@@ -108,11 +155,15 @@ UTF-8 JSON. Both command outputs use `sha256:` followed by 64 lowercase hex
 characters. Never substitute an image digest or invent these values.
 
 Every destructive migration requires recovery confirmation. Its ConfigMap data
-must contain `releaseDigest`, `deploymentID` matching `spec.hosted.deploymentID`,
+must contain `releaseDigest`, `deploymentUID` matching the PIGDeployment's `metadata.uid`,
 `confirmedAt` with a timezone, `postgresRecoveryPoint`, and `objectRecoveryPoint`.
 The timestamp must fall within the release's `recoveryMaxAgeHours`. The
 supervisor checks it before starting a transition and immediately before starting
 a new migration Job, including after a pause.
+
+Read the UID with `kubectl get pigdeployment NAME -n NAMESPACE -o jsonpath='{.metadata.uid}'`.
+Recreating the Kubernetes object requires a new confirmation, even when its name
+and Promptless installation are unchanged. This UID is not a registration credential.
 
 For capacity prerequisites that PIG cannot directly verify, the same ConfigMap
 also needs `capacityConfirmedAt`, `capacityRequirementsDigest`, and
@@ -139,7 +190,7 @@ Dashboard during installation acceptance.
 
 ## Manual chart
 
-The [manual chart](charts/instruction-hub-worker/README.md) is for operator-managed
+The [manual chart](charts/pig-trace-analyzer/README.md) is for operator-managed
 releases. Its pre-upgrade migration hook requires the operator to quiesce the
 existing analyzer before upgrading.
 It does not enforce the supervisor's release confirmation ConfigMap. Supply a

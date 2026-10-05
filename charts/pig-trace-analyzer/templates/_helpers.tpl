@@ -1,12 +1,12 @@
-{{- define "instruction-hub-worker.name" -}}
-instruction-hub-worker
+{{- define "pig-trace-analyzer.name" -}}
+pig-trace-analyzer
 {{- end -}}
 
-{{- define "instruction-hub-worker.fullname" -}}
+{{- define "pig-trace-analyzer.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
-{{- $name := include "instruction-hub-worker.name" . -}}
+{{- $name := include "pig-trace-analyzer.name" . -}}
 {{- if contains $name .Release.Name -}}
 {{- .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
@@ -15,35 +15,35 @@ instruction-hub-worker
 {{- end -}}
 {{- end -}}
 
-{{- define "instruction-hub-worker.secretName" -}}
+{{- define "pig-trace-analyzer.secretName" -}}
 {{- if .Values.secrets.existingSecretName -}}
 {{- .Values.secrets.existingSecretName -}}
 {{- else -}}
-{{- include "instruction-hub-worker.fullname" . -}}
+{{- include "pig-trace-analyzer.fullname" . -}}
 {{- end -}}
 {{- end -}}
 
-{{- define "instruction-hub-worker.serviceAccountName" -}}
+{{- define "pig-trace-analyzer.serviceAccountName" -}}
 {{- if and .Values.migrationJob.enabled .Values.serviceAccount.create -}}
 {{- fail "migrationJob.enabled requires a pre-existing shared ServiceAccount; set serviceAccount.create=false and serviceAccount.name to that account" -}}
 {{- end -}}
 {{- if .Values.serviceAccount.name -}}
 {{- .Values.serviceAccount.name -}}
 {{- else if .Values.serviceAccount.create -}}
-{{- include "instruction-hub-worker.fullname" . -}}
+{{- include "pig-trace-analyzer.fullname" . -}}
 {{- else -}}
 {{- fail "serviceAccount.name is required when serviceAccount.create=false" -}}
 {{- end -}}
 {{- end -}}
 
-{{- define "instruction-hub-worker.labels" -}}
-app.kubernetes.io/name: {{ include "instruction-hub-worker.name" . }}
+{{- define "pig-trace-analyzer.labels" -}}
+app.kubernetes.io/name: {{ include "pig-trace-analyzer.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
-{{- define "instruction-hub-worker.datadogLabels" -}}
+{{- define "pig-trace-analyzer.datadogLabels" -}}
 {{- if .Values.observability.datadog.enabled }}
 tags.datadoghq.com/env: {{ .Values.observability.datadog.env | quote }}
 tags.datadoghq.com/service: {{ .Values.observability.datadog.service | quote }}
@@ -51,7 +51,7 @@ tags.datadoghq.com/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 {{- end -}}
 
-{{- define "instruction-hub-worker.observabilityEnv" -}}
+{{- define "pig-trace-analyzer.observabilityEnv" -}}
 {{- if .Values.observability.datadog.enabled }}
 - name: DD_ENV
   value: {{ .Values.observability.datadog.env | quote }}
@@ -81,13 +81,13 @@ tags.datadoghq.com/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 {{- end -}}
 
-{{- define "instruction-hub-worker.image" -}}
+{{- define "pig-trace-analyzer.image" -}}
 {{- $digest := required "image.digest is required; use a published chart or the verified release digest" .Values.image.digest -}}
 {{- if not (regexMatch "^sha256:[a-f0-9]{64}$" $digest) -}}{{ fail "image.digest must be sha256 followed by 64 lowercase hex characters" }}{{- end -}}
 {{- printf "%s@%s" .Values.image.repository $digest -}}
 {{- end -}}
 
-{{- define "instruction-hub-worker.storageEnv" -}}
+{{- define "pig-trace-analyzer.storageEnv" -}}
 - name: INSTRUCTION_HUB_STORAGE_BACKEND
   value: {{ .Values.instructionHub.storageBackend | quote }}
 {{- if eq .Values.instructionHub.storageBackend "postgres_s3" }}
@@ -116,7 +116,7 @@ tags.datadoghq.com/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 {{- end -}}
 
-{{- define "instruction-hub-worker.caMount" -}}
+{{- define "pig-trace-analyzer.caMount" -}}
 {{- if .Values.instructionHub.postgresCaConfigMapName }}
 - name: postgres-ca
   mountPath: /etc/pig/postgres-ca
@@ -124,7 +124,7 @@ tags.datadoghq.com/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 {{- end -}}
 
-{{- define "instruction-hub-worker.caVolume" -}}
+{{- define "pig-trace-analyzer.caVolume" -}}
 {{- if .Values.instructionHub.postgresCaConfigMapName }}
 - name: postgres-ca
   configMap:

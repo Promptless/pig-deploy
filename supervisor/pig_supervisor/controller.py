@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from datetime import datetime, timedelta
+from hashlib import sha256
 from uuid import uuid4
 
 import httpx
@@ -18,7 +19,15 @@ from .kube import Kube, KubeError
 from .models import DeploymentSpec, Release, stable_version, validation_details
 from .workloads import analyzer_resources, job_resource, secret_refs
 
-CAPABILITIES = frozenset({"native-storage-v1", "migration-ledger-v1", "controller-self-update-v1", "crd-update-v1"})
+CAPABILITIES = frozenset(
+    {
+        "native-storage-v1",
+        "migration-ledger-v1",
+        "installation-identity-v1",
+        "controller-self-update-v1",
+        "crd-update-v1",
+    }
+)
 PHASES = ("preflight", "quiesce", "migration", "rollout", "verify", "supervisor", "complete")
 
 
@@ -55,7 +64,34 @@ def condition(status: dict, name: str, truth: bool, reason: str, message: str, g
     status["conditions"] = [entry for entry in status.get("conditions", []) if entry["type"] != name] + [value]
 
 
-def recovery_check(spec: DeploymentSpec, selected: SelectedRelease, document: dict | None, now: datetime) -> None:
+def acceptance_condition(status: dict, digest: str, config_hash: str, generation: int, now: datetime) -> None:
+    accepted = status.get("acceptedConfigurationHash") == config_hash and status.get("acceptedReleaseDigest") == digest
+    condition(
+        status,
+        "Acceptance",
+        accepted,
+        "CanonicalSuccess" if accepted else "AwaitingCanonicalAcceptance",
+        "An enrolled host has a readable canonical object, succeeded analysis, and hosted acknowledgement."
+        if accepted
+        else "Enroll a host, ingest a real trace, and wait for analysis and Dashboard synchronization.",
+        generation,
+        now,
+    )
+
+
+def helm_release_name(release: dict) -> str:
+    """Resolve Flux's default name, including its 53-character Helm limit."""
+    # https://fluxcd.io/flux/components/helm/helmreleases/#release-name
+    spec = release.get("spec", {})
+    name = spec.get("releaseName")
+    if not name:
+        name = release["metadata"]["name"]
+        if spec.get("targetNamespace"):
+            name = spec["targetNamespace"] + "-" + name
+    return name if len(name) <= 53 else name[:40] + "-" + sha256(name.encode()).hexdigest()[:12]
+
+
+def recovery_check(deployment_uid: str, selected: SelectedRelease, document: dict | None, now: datetime) -> None:
     """Bind a customer confirmation to this installation and exact immutable transition."""
     hours = selected.release.requirements.recovery_max_age_hours
     if hours is None:
@@ -74,7 +110,7 @@ def recovery_check(spec: DeploymentSpec, selected: SelectedRelease, document: di
         or confirmed > now
         or confirmed < now - timedelta(hours=hours)
         or data.get("releaseDigest") != "sha256:" + selected.digest
-        or data.get("deploymentID") != spec.hosted.deployment_id
+        or data.get("deploymentUID") != deployment_uid
         or not data.get("postgresRecoveryPoint")
         or not data.get("objectRecoveryPoint")
     ):
@@ -84,7 +120,7 @@ def recovery_check(spec: DeploymentSpec, selected: SelectedRelease, document: di
         )
 
 
-def capacity_check(spec: DeploymentSpec, selected: SelectedRelease, document: dict | None, now: datetime) -> None:
+def capacity_check(deployment_uid: str, selected: SelectedRelease, document: dict | None, now: datetime) -> None:
     """Require an explicit acknowledgement for capacity that cannot be measured by this controller."""
     requirements = selected.release.requirements.operator_capacity_requirements
     if not requirements:
@@ -102,7 +138,7 @@ def capacity_check(spec: DeploymentSpec, selected: SelectedRelease, document: di
         or confirmed > now
         or confirmed < now - timedelta(hours=selected.release.requirements.capacity_confirmation_max_age_hours)
         or data.get("releaseDigest") != "sha256:" + selected.digest
-        or data.get("deploymentID") != spec.hosted.deployment_id
+        or data.get("deploymentUID") != deployment_uid
         or data.get("capacityRequirementsDigest") != "sha256:" + canonical_digest(requirements)
         or not data.get("capacityEvidence")
     ):
@@ -221,6 +257,8 @@ class Controller:
                     # A repair cannot prove the schema history of an older controller's status.
                     status.setdefault("migrationMayHaveRun", True)
                     status.update(targetDigest=None, targetVersion=None, phase="preflight")
+            # Historical evidence must not certify the next release or configuration.
+            acceptance_condition(status, selected.digest, config_hash, generation, now)
             if (
                 selected.digest == current_digest
                 and not status.get("targetDigest")
@@ -243,8 +281,8 @@ class Controller:
                         else None
                     )
                     if selected.digest != current_digest:
-                        recovery_check(spec, selected, recovery, now)
-                        capacity_check(spec, selected, recovery, now)
+                        recovery_check(deployment["metadata"]["uid"], selected, recovery, now)
+                        capacity_check(deployment["metadata"]["uid"], selected, recovery, now)
                     if (
                         selected.digest != current_digest
                         and selected.release.requirements.operator_capacity_requirements
@@ -374,8 +412,14 @@ class Controller:
             raise
         for release in releases:
             spec = release.get("spec", {})
-            release_name = spec.get("releaseName") or release["metadata"]["name"]
-            if release_name == self.supervisor_name and not spec.get("suspend", False):
+            target_namespace = spec.get("targetNamespace") or release["metadata"].get(
+                "namespace", self.system_namespace
+            )
+            if (
+                target_namespace == self.system_namespace
+                and helm_release_name(release) == self.supervisor_name
+                and not spec.get("suspend", False)
+            ):
                 raise Blocked("FluxHandoffRequired", "Suspend the bootstrap HelmRelease before PIG manages releases.")
 
     def _configuration_hash(self, spec: DeploymentSpec) -> str:
@@ -445,8 +489,8 @@ class Controller:
                         if spec.release.confirmation
                         else None
                     )
-                    recovery_check(spec, selected, recovery, now)
-                    capacity_check(spec, selected, recovery, now)
+                    recovery_check(deployment["metadata"]["uid"], selected, recovery, now)
+                    capacity_check(deployment["metadata"]["uid"], selected, recovery, now)
             if not self._job(deployment, spec, selected, config_hash, phase, status, now):
                 return
         elif phase == "quiesce":
@@ -687,18 +731,4 @@ class Controller:
                 status["lastAcceptanceAt"] = job.get("status", {}).get("completionTime", now.isoformat())
                 status["acceptedJob"] = document["metadata"]["name"]
         # A successful check is evidence, not a claim that every future trace has succeeded.
-        accepted = accepted or (
-            status.get("acceptedConfigurationHash") == config_hash
-            and status.get("acceptedReleaseDigest") == selected.digest
-        )
-        condition(
-            status,
-            "Acceptance",
-            accepted,
-            "CanonicalSuccess" if accepted else "AwaitingCanonicalAcceptance",
-            "An enrolled host has a readable canonical object, succeeded analysis, and hosted acknowledgement."
-            if accepted
-            else "Enroll a host, ingest a real trace, and wait for analysis and Dashboard synchronization.",
-            deployment["metadata"]["generation"],
-            now,
-        )
+        acceptance_condition(status, selected.digest, config_hash, deployment["metadata"]["generation"], now)

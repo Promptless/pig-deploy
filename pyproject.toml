@@ -1,6 +1,6 @@
 [project]
 name = "pig-supervisor"
-version = "0.3.0"
+version = "0.3.1"
 requires-python = ">=3.11"
 dependencies = ["httpx>=0.28,<1", "pydantic>=2.11,<3", "packaging>=24", "PyYAML>=6,<7"]
 [project.scripts]

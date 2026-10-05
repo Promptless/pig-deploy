@@ -1,9 +1,12 @@
 # Release operations
 
-The first source candidate is 0.3.0. The stable catalog is empty until an accepted
-release is published and its catalog promotion is reviewed. Local tests are not
-installation acceptance. No three-cloud acceptance record is supplied by this
-change, so its publication workflow cannot release an untested candidate.
+The stable catalog is empty until an accepted release is published and its catalog
+promotion is reviewed. Local tests are not installation acceptance. Versions 0.3.0
+and 0.3.1 are AWS-only releases. Report-backed acceptance covers a real AWS clean
+installation and canonical pipeline, plus the unattended 0.3.0 to 0.3.1 patch update
+for 0.3.1. Version 0.3.1 may instead use the explicit owner sign-off described below.
+Azure and GCP support remains experimental; these releases do not
+establish cloud validation for their native adapters or deployment modules.
 
 ## Artifact and trust boundary
 
@@ -34,21 +37,37 @@ check can pass. No customer secret belongs in this repository or its evidence.
 
 1. Merge reviewed public source and the compatible private analyzer implementation.
    The analyzer's deployment-capabilities command must report controller protocol
-   1, schema revision 1, native `s3`/`azureBlob`/`gcs`, and all maintenance commands.
+   1, schema revision 3, native `s3`/`azureBlob`/`gcs`, and the `preflight`,
+   `supervised-migrate`, `verify`, and `acceptance` commands. Its capabilities must
+   include `native-storage-v1`, `migration-ledger-v1`, and `installation-identity-v1`.
+   The identity capability ensures the analyzer can resolve its installation from
+   its credential without an operator-supplied deployment ID.
    Its private image workflow publishes a SHA tag, never a mutable release tag.
 2. With explicit publication authorization, run the supervisor candidate workflow
    on `main`. Record both image digests and the exact public source commit. The
    supervisor image embeds that commit as its OCI revision and reports its version.
-3. In separately authorized existing EKS, AKS, and GKE test environments, exercise
-   installation and real canonical acceptance; minor and major upgrades; pause
-   and pin; blocked release and automatic resume; Secret rotation; supervisor
-   self-update; and recovery. Test native workload identity refresh and exact
-   database TLS/CA behavior. Use approved recovery points before destructive work.
+3. For 0.3.0 and 0.3.1, install the exact candidate into a fresh EKS namespace using S3,
+   verified PostgreSQL TLS, native workload identity, and the public supervisor
+   path. Prove enrollment, a canonical object written and readable at its exact
+   native URI, successful analysis of the matching fingerprint, hosted
+   acknowledgement, and the matching trace and analysis in the Dashboard.
+   Zero findings is a successful analysis. An image pull, HTTP 200, healthy Pods,
+   or green CI does not establish this result.
+   For 0.3.1, also complete the [AWS unattended patch-update test](catalog/testing/aws-updates/README.md)
+   and prove a fresh trace completes the same pipeline after the upgrade.
 4. Add `releases/acceptance/VERSION.json` in a reviewed PR. Its shape is generated
    in [schemas/acceptance.json](schemas/acceptance.json). Supply `version`,
    `sourceCommit`, exact `analyzerImage`/`supervisorImage`, `requirementsDigest`,
-   optional `rollbackTo`, and `eks`, `aks`, `gke` records. Each cloud record needs
-   `testedAt` and an `evidence` map with these exact keys:
+   optional `rollbackTo`, and an `eks` record with `testedAt` and an `evidence`
+   map containing `install` and `canonicalAcceptance`, plus `patchUpdate` for 0.3.1.
+
+   For 0.3.0 and 0.3.1, `aks` and `gke` reports are optional experimental evidence. Any
+   supplied report must cover that version's required checks and meet the same freshness and URL
+   rules. Additional lifecycle checks may be recorded when actually tested.
+   A nonempty `rollbackTo` requires a `recovery` report for every required cloud.
+
+   The AWS-only exception applies only to 0.3.0 and 0.3.1. Later versions retain
+   the EKS, AKS, and GKE gate with all nine checks until a reviewed policy change:
 
    ```text
    install canonicalAcceptance minorUpdate majorUpdate pausePin
@@ -60,12 +79,49 @@ check can pass. No customer secret belongs in this repository or its evidence.
    content, installation tokens, DSNs, or private infrastructure identifiers.
    A reviewer checks report contents. The workflow validates structure, binding,
    and freshness; it does not independently execute or audit the evidence URLs.
+
+   **Owner sign-off for 0.3.1:** the release owner may explicitly approve AWS-only
+   publication and stable promotion in place of stored test reports. Retain all
+   exact source, image, and requirements identities, omit the cloud reports, and
+   supply `ownerSignOff` with `approvedBy`, timezone-aware `approvedAt`,
+   `scope: "aws-only"`, and a `statement` explaining the approval. This is an
+   approval record, not a claim that report-backed testing was verified. It must
+   not contain `testedAt`, invented report URLs, or advertised rollback paths.
+   The exception applies only to 0.3.1; image execution, capabilities, artifact
+   integrity, anonymous access, and catalog review remain mandatory.
 5. Compute `requirementsDigest` as SHA-256 of the requirements model's canonical
    JSON: parse `releases/requirements/VERSION.json` with `Requirements`, dump with
    aliases, then serialize with sorted keys and compact separators. This internal
    evidence digest is 64 lowercase hex characters without the `sha256:` prefix.
-   Acceptance expires after 14 days. `rollbackTo` contains bare manifest digests
+   Test evidence and owner sign-off expire after 14 days. `rollbackTo` contains bare manifest digests
    for rollback paths actually included in recovery acceptance.
+
+### Schema-3 candidate
+
+The 0.3.0 requirements accept starting schema revisions 0, 1, and 2 and target revision
+3. Worker checks also accept the target revision, so retries and configuration
+rotation work after migration. Keep the supervisor's stop, migrate, start sequence.
+
+Revision 3 adds instruction-source provenance to analysis runs without deleting
+existing data. Installations below revision 2 also receive the native-location
+migration, which preserves trace records and their exact native object locations in
+`trace_object_uri`. It removes the duplicate location column and synchronization
+objects. Conflicting or missing locations abort the migration transaction.
+`destructiveMigration` is false because this migration preserves application data;
+it does not mean an older image can run against the resulting database. Older
+analyzers reject the revision-3 ledger even though its new column is additive. Recover
+with a schema-3-compatible image or a forward repair. Include a `rollbackTo` entry
+only for a tested recovery path between releases with the same schema revision.
+
+Select instruction repositories in PIG Settings through the organization's GitHub
+connection. The analyzer retrieves the selected-source catalog and repository
+access through Runtime. Deployment configuration carries model and infrastructure
+credentials; it does not carry repository identities or a repository token.
+
+Define upgrade fixtures before testing upgrades. Each minor or major transition
+needs immutable source and image identities, a compatible supervisor-capable
+baseline, and a real change to exercise. Relabelling the same image or using an
+incompatible worker does not prove an upgrade.
 
 ## Publication and promotion
 
@@ -76,6 +132,10 @@ operator's final authorization gate.
 The workflow selects the accepted commit, checks any existing tag points there,
 then anonymously pulls both runtime images. It verifies supervisor source/version
 and executes the analyzer capability command before packaging either chart.
+Release policy and publication tooling run from the reviewed workflow commit;
+charts, requirements, CRDs, and the source archive come from the accepted source
+commit. This lets reviewed release-policy changes apply without rebuilding or
+relabeling the accepted runtime images.
 Only absent chart versions are pushed. Existing versions must match the exact
 package bytes, allowing a failed anonymous-access step to be retried after an
 administrator fixes package visibility.
@@ -93,11 +153,15 @@ merging. If PR creation is interrupted after the branch push, rerun publication:
 it verifies the existing manifest bytes, digest, and reachable immutable commit,
 then creates or locates the PR without rewriting the branch. A mismatched branch
 or closed, unmerged PR requires operator review.
+If organization policy blocks Actions from creating PRs, the operator can open a
+draft PR from the published `release/catalog-VERSION` branch to `main`, then rerun
+publication. The retry verifies the branch and reuses that PR; organization-wide
+Actions permissions do not need to change.
 Merging makes the release eligible for automatic updates, including
 major versions. Do not squash away or delete the manifest commit referenced by
 its URL. Keep releases, tags, and those commits reachable and protected.
 
-## Release-required engineering acceptance
+## Scope of acceptance
 
 The automated suite covers native chart rendering, CRD admission, scope-limited
 RBAC, fake-API restart/retry behavior, recovery/capacity binding, credential
@@ -107,9 +171,19 @@ migration compatibility, and bounded maintenance failures. The credential-free
 [Kubernetes CI suite](CI.md) also exercises real Helm install/upgrade, process
 handoff, admission, status conflicts, SSA, and RBAC in disposable kind clusters.
 
-Remaining release gates are real three-cloud installation/update/recovery
-acceptance, cloud SDK token refresh under real federation, supervisor self-update
-and recovery with the real analyzer, PostgreSQL certificate/network
-validation, both runtime images and charts anonymously pullable, and full host
-pipeline/Dashboard evidence. A Docker build runs in pull-request CI; local
-validation does not depend on a working Docker daemon.
+For 0.3.0 and report-backed 0.3.1 acceptance, live evidence covers a clean AWS installation, verified
+PostgreSQL TLS and S3 access through workload identity, and the full host pipeline
+through Dashboard confirmation. Both runtime images and charts must be anonymously
+pullable, and publication and stable activation still require review of the
+concrete artifacts and evidence.
+Report-backed 0.3.1 acceptance additionally covers the real AWS patch upgrade and
+fresh pipeline acceptance after that upgrade. An owner sign-off substitutes an
+explicit release decision for these stored reports; it does not prove their results.
+
+These AWS release gates do not establish minor/major upgrade behavior,
+pause/pin and rotation in a real cloud, interrupted-migration recovery, long-lived
+workload identity refresh, supervisor self-update with the real analyzer, or
+Azure/GCP installation. Preserve those engineering checks for subsequent release
+validation and for promoting experimental cloud support. Define genuine upgrade
+and recovery fixtures before running them; a version-label change is not an upgrade.
+A Docker build runs in pull-request CI; local validation does not require Docker.

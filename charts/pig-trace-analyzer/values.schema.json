@@ -252,26 +252,12 @@
                 }
               ]
             },
-            "repository": {
-              "type": "object",
-              "properties": {
-                "url": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "fullName": {
-                  "type": "string"
-                },
-                "tokenSecretEnabled": {
-                  "type": "boolean"
-                },
-                "mirrorRoot": {
-                  "type": "string"
-                }
-              }
+            "catalogEnabled": {
+              "type": "boolean"
+            },
+            "mirrorRoot": {
+              "type": "string",
+              "minLength": 1
             }
           }
         },
@@ -318,12 +304,6 @@
         },
         "analysisModelApiKey": {
           "type": "string"
-        },
-        "analysisRepositoryTokenKey": {
-          "type": "string"
-        },
-        "analysisRepositoryToken": {
-          "type": "string"
         }
       }
     },
@@ -336,7 +316,7 @@
       "properties": {
         "repository": {
           "type": "string",
-          "pattern": "^ghcr\\.io/promptless/instruction-hub-worker$"
+          "pattern": "^ghcr\\.io/promptless/pig-trace-analyzer$"
         },
         "digest": {
           "type": "string",

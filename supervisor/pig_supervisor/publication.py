@@ -14,6 +14,7 @@ import tempfile
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 
 import httpx
 import yaml
@@ -23,7 +24,11 @@ from .catalog import canonical_digest
 from .models import Contract, Digest, Image, Release, Requirements, stable_version
 
 REPO = "https://github.com/Promptless/pig-deploy"
-CHARTS = ("pig-supervisor", "instruction-hub-worker")
+CHARTS = ("pig-supervisor", "pig-trace-analyzer")
+INITIAL_RELEASE = "0.3.0"
+INSTALL_CHECKS = frozenset({"install", "canonicalAcceptance"})
+AWS_PATCH_RELEASE = "0.3.1"
+PATCH_CHECKS = INSTALL_CHECKS | {"patchUpdate"}
 CHECKS = frozenset(
     {
         "install",
@@ -45,12 +50,25 @@ class CloudAcceptance(Contract):
 
     @model_validator(mode="after")
     def complete(self):
-        if set(self.evidence) != CHECKS:
-            raise ValueError("cloud acceptance must include every required check")
+        if not self.evidence or not set(self.evidence) <= CHECKS | PATCH_CHECKS:
+            raise ValueError("cloud acceptance must contain only recognized checks")
         if not all(re.fullmatch(r"https://[^\s]+", value) for value in self.evidence.values()):
             raise ValueError("every acceptance check needs a public sanitized evidence URL")
         if self.tested_at.tzinfo is None:
             raise ValueError("testedAt requires a timezone")
+        return self
+
+
+class OwnerSignOff(Contract):
+    approved_by: str = Field(pattern=r"\S")
+    approved_at: datetime
+    scope: Literal["aws-only"]
+    statement: str = Field(pattern=r"\S")
+
+    @model_validator(mode="after")
+    def timezone_required(self):
+        if self.approved_at.tzinfo is None:
+            raise ValueError("approvedAt requires a timezone")
         return self
 
 
@@ -61,23 +79,56 @@ class AcceptanceEvidence(Contract):
     supervisor_image: Image
     requirements_digest: Digest
     rollback_to: list[Digest] = Field(default_factory=list)
-    eks: CloudAcceptance
-    aks: CloudAcceptance
-    gke: CloudAcceptance
+    eks: CloudAcceptance | None = None
+    aks: CloudAcceptance | None = None
+    gke: CloudAcceptance | None = None
+    owner_sign_off: OwnerSignOff | None = None
+
+    @model_validator(mode="after")
+    def release_coverage(self):
+        """Scope the first installation and patch release to their AWS acceptance."""
+        initial = self.version == INITIAL_RELEASE
+        aws_patch = self.version == AWS_PATCH_RELEASE
+        if self.owner_sign_off is not None:
+            if not aws_patch:
+                raise ValueError("owner sign-off is permitted only for AWS-only 0.3.1")
+            if any(cloud is not None for cloud in (self.eks, self.aks, self.gke)):
+                raise ValueError("owner sign-off must not be presented as cloud test evidence")
+            if self.rollback_to:
+                raise ValueError("owner sign-off cannot advertise tested rollback paths")
+            return self
+        required_checks = INSTALL_CHECKS if initial else PATCH_CHECKS if aws_patch else CHECKS
+        required_clouds = {"eks"} if initial or aws_patch else {"eks", "aks", "gke"}
+        for name in ("eks", "aks", "gke"):
+            cloud = getattr(self, name)
+            if cloud is None:
+                if name in required_clouds:
+                    raise ValueError(f"{name} acceptance is required for this release")
+                continue
+            if not required_checks <= set(cloud.evidence):
+                raise ValueError(f"{name} acceptance is missing required checks")
+            if self.rollback_to and name in required_clouds and "recovery" not in cloud.evidence:
+                raise ValueError("rollback declarations require recovery acceptance")
+        return self
 
 
 def validate_evidence(data: dict, version: str, now: datetime) -> AcceptanceEvidence:
-    """Require recent, exact-artifact evidence for all three real cloud environments."""
+    """Require recent, exact-artifact evidence for the release's cloud coverage."""
     stable_version(version)
     evidence = AcceptanceEvidence.model_validate(data)
     if evidence.version != version:
         raise ValueError("evidence version differs from the requested release")
-    if not evidence.analyzer_image.startswith("ghcr.io/promptless/instruction-hub-worker@"):
+    if not evidence.analyzer_image.startswith("ghcr.io/promptless/pig-trace-analyzer@"):
         raise ValueError("analyzer must use the worker image repository")
     if not evidence.supervisor_image.startswith("ghcr.io/promptless/pig-supervisor@"):
         raise ValueError("supervisor must use its own image repository")
+    if (
+        evidence.owner_sign_off is not None
+        and not now - timedelta(days=14) <= evidence.owner_sign_off.approved_at <= now
+    ):
+        raise ValueError("owner sign-off must be from the last fourteen days")
     for cloud in (evidence.eks, evidence.aks, evidence.gke):
-        if not now - timedelta(days=14) <= cloud.tested_at <= now:
+        if cloud is not None and not now - timedelta(days=14) <= cloud.tested_at <= now:
             raise ValueError("acceptance evidence must be from the last fourteen days")
     return evidence
 
@@ -89,7 +140,8 @@ def check_capabilities(capabilities: dict, requirements: Requirements) -> None:
         or capabilities.get("schemaRevision") != requirements.schema_to
         or not set(requirements.storage_backends) <= set(capabilities.get("storageBackends", []))
         or not {"preflight", "supervised-migrate", "verify", "acceptance"} <= set(capabilities.get("commands", []))
-        or not {"native-storage-v1", "migration-ledger-v1"} <= set(capabilities.get("capabilities", []))
+        or not {"native-storage-v1", "migration-ledger-v1", "installation-identity-v1"}
+        <= set(capabilities.get("capabilities", []))
     ):
         raise ValueError("worker image does not implement this deployment contract")
 
@@ -102,7 +154,7 @@ class Registry:
         self.auth = (username, password) if username and password else None
 
     def manifest(self, name: str, reference: str, *, missing_ok: bool = False) -> tuple[str, dict] | None:
-        if not re.fullmatch(r"(charts/)?(pig-supervisor|instruction-hub-worker)", name):
+        if not re.fullmatch(r"(charts/)?(pig-supervisor|pig-trace-analyzer)", name):
             raise ValueError("unexpected registry repository")
         if not re.fullmatch(r"(sha256:[a-f0-9]{64}|[0-9]+\.[0-9]+\.[0-9]+)", reference):
             raise ValueError("expected an immutable digest or canonical release version")
@@ -266,7 +318,7 @@ def assemble(
                     (output / f"pig-deploy-{evidence.version}.tar.gz").read_bytes()
                 ).hexdigest(),
                 "supervisorChart": charts["pig-supervisor"],
-                "workerChart": charts["instruction-hub-worker"],
+                "workerChart": charts["pig-trace-analyzer"],
             },
         }
     )

@@ -4,6 +4,7 @@ import json
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from pathlib import Path
 from time import monotonic
 
 import httpx
@@ -19,12 +20,15 @@ from pydantic import ValidationError
 NOW = datetime(2026, 9, 15, tzinfo=UTC)
 ROOT = "https://raw.githubusercontent.com/Promptless/pig-deploy/" + "e" * 40
 CATALOG = "https://raw.githubusercontent.com/Promptless/pig-deploy/main/catalog/stable.json"
+CANDIDATE_REQUIREMENTS = json.loads(
+    (Path(__file__).resolve().parents[1] / "releases/requirements/0.3.0.json").read_text()
+)
 
 
 def manifest(version="1.0.0", **requirements):
     return {
         "version": version,
-        "analyzerImage": "ghcr.io/promptless/instruction-hub-worker@sha256:" + "a" * 64,
+        "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:" + "a" * 64,
         "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:" + "b" * 64,
         "requirements": {
             "storageBackends": ["s3", "azureBlob", "gcs"],
@@ -39,8 +43,6 @@ def spec_document():
     return {
         "serviceAccountName": "pig-analyzer",
         "hosted": {
-            "runtimeURL": "https://api.promptless.ai",
-            "deploymentID": "customer-installation",
             "installTokenSecretRef": {"name": "pig-credentials", "key": "install-token"},
         },
         "endpoint": {"hostname": "pig.example.com", "ingressClassName": "nginx", "tlsSecretName": "pig-tls"},
@@ -52,12 +54,6 @@ def spec_document():
             "s3": {"bucket": "example-pig", "prefix": "trace-objects", "region": "us-east-2"},
         },
         "analysis": {
-            "repository": {
-                "url": "https://github.com/example/instructions.git",
-                "id": 42,
-                "fullName": "example/instructions",
-                "tokenSecretRef": {"name": "pig-credentials", "key": "repository-token"},
-            },
             "model": {
                 "provider": "openai",
                 "authentication": "api_key",
@@ -84,6 +80,33 @@ def deployment():
     }
 
 
+@pytest.mark.parametrize("runtime_url", [None, "https://staging.example.com/"])
+def test_installation_credential_supplies_identity_for_every_workload(runtime_url):
+    document = deployment()
+    if runtime_url is not None:
+        document["spec"]["hosted"]["runtimeURL"] = runtime_url
+    spec = DeploymentSpec.model_validate(document["spec"])
+    release = Release.model_validate(manifest())
+    resources = [analyzer_resources(document, spec, release, "hash")[0]]
+    resources.extend(
+        job_resource(document, spec, release, "a" * 64, "hash", phase, 0)
+        for phase in ("preflight", "migration", "verify", "acceptance")
+    )
+    for resource in resources:
+        env = {entry["name"]: entry for entry in resource["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert env["INSTRUCTION_HUB_RUNTIME_BASE_URL"]["value"] == (
+            runtime_url.rstrip("/") if runtime_url else "https://api.gopromptless.ai"
+        )
+        assert "INSTRUCTION_HUB_DEPLOYMENT_INSTANCE_ID" not in env
+        assert "INSTRUCTION_HUB_DEPLOYMENT_NAME" not in env
+        assert not any(name.startswith("INSTRUCTION_HUB_ANALYSIS_REPOSITORY_") for name in env)
+        assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_NAME"]["value"] == "gpt-5"
+        assert env["INSTRUCTION_HUB_INSTALL_TOKEN"]["valueFrom"]["secretKeyRef"] == {
+            "name": "pig-credentials",
+            "key": "install-token",
+        }
+
+
 def client_for(*documents):
     bodies = {}
     entries = []
@@ -108,7 +131,7 @@ class FakeKube:
         self.documents[("ServiceAccount", "pig", "pig-analyzer")] = {"metadata": {"resourceVersion": "1"}}
         self.documents[("Secret", "pig", "pig-credentials")] = {
             "metadata": {"resourceVersion": "1"},
-            "data": {key: "opaque" for key in ("install-token", "postgres-dsn", "model-api-key", "repository-token")},
+            "data": {key: "opaque" for key in ("install-token", "postgres-dsn", "model-api-key")},
         }
         self.documents[("ConfigMap", "pig", "postgres-ca")] = {
             "metadata": {"resourceVersion": "1"},
@@ -244,6 +267,31 @@ def test_install_is_restartable_and_ready_is_distinct_from_acceptance():
         assert {r["kind"] for r in kube.applied} == {"Deployment", "Service", "Ingress", "Job"}
 
 
+@pytest.mark.parametrize("tls_secret_name", ["pig-tls", None])
+def test_ingress_supports_secret_and_controller_managed_certificates(tls_secret_name):
+    document = deployment()
+    endpoint = document["spec"]["endpoint"]
+    if tls_secret_name is None:
+        endpoint.pop("tlsSecretName")
+        endpoint["ingressClassName"] = "alb"
+        endpoint["ingressAnnotations"] = {
+            "alb.ingress.kubernetes.io/certificate-arn": "arn:aws:acm:us-east-2:123456789012:certificate/example",
+            "alb.ingress.kubernetes.io/listen-ports": '[{"HTTPS":443}]',
+        }
+    kube = FakeKube()
+    with client_for(manifest()) as client:
+        reconcile_to_ready(kube, document, client)
+    ingress = kube.get("Ingress", "pig", "acme-analyzer")
+    tls = ingress["spec"]["tls"][0]
+    assert tls["hosts"] == [endpoint["hostname"]]
+    if tls_secret_name is None:
+        assert "secretName" not in tls
+        assert ingress["metadata"]["annotations"] == endpoint["ingressAnnotations"]
+        assert ingress["spec"]["ingressClassName"] == "alb"
+    else:
+        assert tls["secretName"] == tls_secret_name
+
+
 def test_failed_preflight_retries_and_resumes_after_external_fix():
     kube, document = FakeKube(), deployment()
     with client_for(manifest()) as client:
@@ -272,6 +320,86 @@ def test_competing_policy_and_flux_ownership_block_before_any_workload():
         assert reason(document) == "FluxHandoffRequired" and not kube.applied
 
 
+@pytest.mark.parametrize(
+    "name,spec,system_namespace,supervisor_name,matching",
+    [
+        ("bootstrap", {"targetNamespace": "pig-system"}, "pig-system", "pig-system-bootstrap", True),
+        ("bootstrap", {}, "pig-system", "bootstrap", True),
+        ("bootstrap", {"releaseName": "custom", "targetNamespace": "pig-system"}, "pig-system", "custom", True),
+        (
+            "with-a-nice-object-name",
+            {"targetNamespace": "a-very-lengthy-target-namespace"},
+            "a-very-lengthy-target-namespace",
+            "a-very-lengthy-target-namespace-with-a-n-97af5d7f41f3",
+            True,
+        ),
+        ("bootstrap", {"releaseName": "custom", "targetNamespace": "other"}, "pig-system", "custom", False),
+        ("unrelated", {}, "pig-system", "pig-supervisor", False),
+    ],
+)
+@pytest.mark.parametrize("suspended", [False, True])
+def test_flux_handoff_matches_installed_release_identity(
+    name, spec, system_namespace, supervisor_name, matching, suspended
+):
+    kube, document = FakeKube(), deployment()
+    kube.flux = [{"metadata": {"name": name, "namespace": system_namespace}, "spec": spec | {"suspend": suspended}}]
+    with client_for(manifest()) as client:
+        controller = Controller(kube, client, CATALOG, "pig", system_namespace, supervisor_name)
+        for _ in range(2):
+            controller.reconcile(document, 1, NOW)
+        if matching and not suspended:
+            assert reason(document) == "FluxHandoffRequired" and not kube.applied
+        else:
+            assert reason(document) == "ChecksPassed"
+            assert [resource["kind"] for resource in kube.applied] == ["Job"]
+
+
+@pytest.mark.parametrize("change", ["Secret", "ServiceAccount", "ConfigMap", "release"])
+def test_acceptance_is_invalidated_through_transition_and_renewed_only_with_matching_evidence(change):
+    kube, document = FakeKube(), deployment()
+    with client_for(manifest()) as client:
+        reconcile_to_ready(kube, document, client)
+        controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
+        controller.reconcile(document, 1, NOW)
+        kube.finish_jobs()
+        controller.reconcile(document, 1, NOW)
+    previous = deepcopy(document["status"])
+    assert next(c for c in previous["conditions"] if c["type"] == "Acceptance")["status"] == "True"
+    if change != "release":
+        name = {"Secret": "pig-credentials", "ServiceAccount": "pig-analyzer", "ConfigMap": "postgres-ca"}[change]
+        kube.get(change, "pig", name)["metadata"]["resourceVersion"] = "2"
+    releases = [manifest(), manifest("2.0.0")] if change == "release" else [manifest()]
+    with client_for(*releases) as client:
+        for _ in range(24):
+            controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
+            controller.reconcile(document, 1, NOW)
+            status = document["status"]
+            assert next(c for c in status["conditions"] if c["type"] == "Acceptance")["status"] == "False"
+            for key in ("acceptedConfigurationHash", "acceptedReleaseDigest", "acceptedJob", "lastAcceptanceAt"):
+                assert status[key] == previous[key]
+            if status["phase"] == "complete" and not status.get("targetDigest"):
+                break
+            kube.finish_jobs()
+        else:
+            pytest.fail("transition never completed")
+        assert next(c for c in status["conditions"] if c["type"] == "Ready")["status"] == "True"
+        assert (status["configurationHash"], status["currentDigest"]) != (
+            previous["configurationHash"],
+            previous["currentDigest"],
+        )
+        # The next steady reconcile starts a new acceptance Job; it is not evidence yet.
+        controller.reconcile(document, 1, NOW)
+        assert next(c for c in document["status"]["conditions"] if c["type"] == "Acceptance")["status"] == "False"
+        kube.finish_jobs()
+        controller.reconcile(document, 1, NOW)
+        status = document["status"]
+        assert next(c for c in status["conditions"] if c["type"] == "Acceptance")["status"] == "True"
+        assert status["acceptedConfigurationHash"] == status["configurationHash"]
+        assert status["acceptedReleaseDigest"] == status["currentDigest"]
+        assert status["acceptedJob"] != previous["acceptedJob"]
+    assert document["metadata"]["generation"] == 1
+
+
 def test_secret_rotation_revalidates_and_never_overwrites_secret_or_serviceaccount():
     kube, document = FakeKube(), deployment()
     with client_for(manifest()) as client:
@@ -297,25 +425,25 @@ def test_paused_policy_uses_installed_manifest_without_network():
 
 
 def test_recovery_is_exact_fresh_and_rechecked_after_pause():
-    spec = DeploymentSpec.model_validate(spec_document())
+    deployment_uid = deployment()["metadata"]["uid"]
     selected = SelectedRelease(Release.model_validate(manifest(recoveryMaxAgeHours=24)), "c" * 64)
     data = {
         "releaseDigest": "sha256:" + selected.digest,
-        "deploymentID": spec.hosted.deployment_id,
+        "deploymentUID": deployment_uid,
         "postgresRecoveryPoint": "snapshot-example",
         "objectRecoveryPoint": "version-window-example",
         "confirmedAt": NOW.isoformat(),
     }
-    recovery_check(spec, selected, {"data": data}, NOW)
+    recovery_check(deployment_uid, selected, {"data": data}, NOW)
     for overrides in (
         {"releaseDigest": "d" * 64},
-        {"deploymentID": "another-installation"},
+        {"deploymentUID": "another-installation"},
         {"confirmedAt": (NOW - timedelta(hours=25)).isoformat()},
         {"confirmedAt": (NOW + timedelta(hours=1)).isoformat()},
         {"postgresRecoveryPoint": ""},
     ):
         with pytest.raises(Blocked, match="Refresh"):
-            recovery_check(spec, selected, {"data": {**data, **overrides}}, NOW)
+            recovery_check(deployment_uid, selected, {"data": {**data, **overrides}}, NOW)
 
 
 def test_new_capability_cannot_grant_rbac():
@@ -397,7 +525,7 @@ def test_kubernetes_refuses_adoption():
 
 
 def test_capacity_acknowledgement_binds_release_requirements_and_expires():
-    spec = DeploymentSpec.model_validate(spec_document())
+    deployment_uid = deployment()["metadata"]["uid"]
     selected = SelectedRelease(
         Release.model_validate(
             manifest(operatorCapacityRequirements=["Allow two times the table size for migration."])
@@ -406,27 +534,31 @@ def test_capacity_acknowledgement_binds_release_requirements_and_expires():
     )
     data = {
         "releaseDigest": "sha256:" + selected.digest,
-        "deploymentID": spec.hosted.deployment_id,
+        "deploymentUID": deployment_uid,
         "capacityRequirementsDigest": "sha256:"
         + canonical_digest(selected.release.requirements.operator_capacity_requirements),
         "capacityConfirmedAt": NOW.isoformat(),
         "capacityEvidence": "Operator checked managed database metrics after Terraform change.",
     }
-    capacity_check(spec, selected, {"data": data}, NOW)
+    capacity_check(deployment_uid, selected, {"data": data}, NOW)
     for overrides in (
         {"releaseDigest": "sha256:" + "d" * 64},
+        {"deploymentUID": "replacement-deployment-uid"},
         {"capacityRequirementsDigest": "sha256:" + "d" * 64},
         {"capacityConfirmedAt": (NOW - timedelta(days=2)).isoformat()},
         {"capacityEvidence": ""},
     ):
         with pytest.raises(Blocked):
-            capacity_check(spec, selected, {"data": {**data, **overrides}}, NOW)
+            capacity_check(deployment_uid, selected, {"data": {**data, **overrides}}, NOW)
     with pytest.raises(Blocked):
-        capacity_check(spec, selected, None, NOW)
+        capacity_check(deployment_uid, selected, None, NOW)
     # A recovery confirmation cannot stand in for the separate capacity acknowledgement.
     with pytest.raises(Blocked):
         capacity_check(
-            spec, selected, {"data": {"confirmedAt": NOW.isoformat(), "postgresRecoveryPoint": "snapshot"}}, NOW
+            deployment_uid,
+            selected,
+            {"data": {"confirmedAt": NOW.isoformat(), "postgresRecoveryPoint": "snapshot"}},
+            NOW,
         )
 
 
@@ -441,7 +573,7 @@ def test_confirmation_arrival_resumes_without_a_terraform_inventory():
         kube.documents[("ConfigMap", "pig", "release-confirmation")] = {
             "data": {
                 "releaseDigest": "sha256:" + selected.digest,
-                "deploymentID": "customer-installation",
+                "deploymentUID": document["metadata"]["uid"],
                 "capacityRequirementsDigest": "sha256:"
                 + canonical_digest(selected.release.requirements.operator_capacity_requirements),
                 "capacityConfirmedAt": NOW.isoformat(),
@@ -548,9 +680,10 @@ def test_forward_repair_can_replace_a_failed_target_at_safe_checkpoint():
     assert document["status"]["currentVersion"] == "1.0.1"
 
 
-def test_paused_secret_rotation_finishes_offline_without_repeating_migration():
+@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-3-candidate"])
+def test_paused_secret_rotation_finishes_offline_without_repeating_migration(requirements):
     kube, document = FakeKube(), deployment()
-    with client_for(manifest()) as client:
+    with client_for(manifest(**requirements)) as client:
         reconcile_to_ready(kube, document, client)
     previous = document["status"]["configurationHash"]
     migrations_before = [
@@ -772,7 +905,7 @@ def test_confirmation_expiry_after_pause_blocks_creation_of_destructive_migratio
         confirmation = {
             "data": {
                 "releaseDigest": "sha256:" + selected.digest,
-                "deploymentID": "customer-installation",
+                "deploymentUID": document["metadata"]["uid"],
                 "postgresRecoveryPoint": "snapshot-example",
                 "objectRecoveryPoint": "version-window-example",
                 "confirmedAt": NOW.isoformat(),
@@ -1025,11 +1158,12 @@ def test_terminal_migration_waits_for_terminating_pods(action, outcome):
             assert kube.applied[-1]["metadata"]["name"] != job["metadata"]["name"]
 
 
-def test_quiesce_waits_for_terminating_analyzer_pods_and_resumes_with_apply() -> None:
+@pytest.mark.parametrize("requirements", [{}, CANDIDATE_REQUIREMENTS], ids=["schema-1", "schema-3-candidate"])
+def test_quiesce_waits_for_terminating_analyzer_pods_and_resumes_with_apply(requirements) -> None:
     kube, document = FakeKube(), deployment()
     with client_for(manifest()) as client:
         reconcile_to_ready(kube, document, client)
-    with client_for(manifest(), manifest("2.0.0")) as client:
+    with client_for(manifest(), manifest("2.0.0", **requirements)) as client:
         controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
         for _ in range(12):
             controller.reconcile(document, 1, NOW)
@@ -1060,6 +1194,16 @@ def test_quiesce_waits_for_terminating_analyzer_pods_and_resumes_with_apply() ->
         kube.pods[0]["status"]["phase"] = "Succeeded"
         controller.reconcile(document, 1, NOW)
         assert document["status"]["phase"] == "migration"
+        controller.reconcile(document, 1, NOW)
+        migration = kube.applied[-1]
+        container = migration["spec"]["template"]["spec"]["containers"][0]
+        assert container["args"] == ["supervised-migrate"]
+        passed_requirements = json.loads(next(v["value"] for v in container["env"] if v["name"] == "PIG_REQUIREMENTS"))
+        assert passed_requirements["schemaFrom"] == requirements.get("schemaFrom", [0, 1])
+        assert passed_requirements["schemaTo"] == requirements.get("schemaTo", 1)
+        controller.reconcile(document, 1, NOW)
+        assert document["status"]["phase"] == "migration"
+        assert kube.get("Deployment", "pig", "acme-analyzer")["spec"]["replicas"] == 0
         for _ in range(24):
             controller.reconcile(document, 1, NOW)
             kube.finish_jobs()

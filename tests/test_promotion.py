@@ -34,7 +34,7 @@ def promotion(tmp_path, monkeypatch):
         json.dumps(
             {
                 "version": "0.3.0",
-                "analyzerImage": "ghcr.io/promptless/instruction-hub-worker@sha256:" + "a" * 64,
+                "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:" + "a" * 64,
                 "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:" + "b" * 64,
                 "requirements": {"storageBackends": ["s3"], "schemaFrom": [0, 1], "schemaTo": 1},
                 "artifacts": {
@@ -50,7 +50,7 @@ def promotion(tmp_path, monkeypatch):
                         }
                         for key, name in [
                             ("supervisorChart", "pig-supervisor"),
-                            ("workerChart", "instruction-hub-worker"),
+                            ("workerChart", "pig-trace-analyzer"),
                         ]
                     },
                 },

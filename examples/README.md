@@ -1,5 +1,8 @@
 # Provision infrastructure for an existing cluster
 
+Version 0.3.0 targets a clean AWS/EKS installation. Azure/AKS and GCP/GKE examples
+are experimental and are not covered by the first release's cloud acceptance.
+
 Choose [AWS](aws/README.md), [Azure](azure/README.md), or [GCP](gcp/README.md).
 Each example uses Terraform 1.11.4 and committed provider locks. Cluster creation,
 state backend creation, DNS/TLS ingress, model endpoints, and Secret delivery
@@ -40,9 +43,10 @@ module in another root, use its Git URL with the release's full source commit as
    `watchNamespace: pig` and its pinned chart version. If Flux performed bootstrap,
    suspend its HelmRelease before proceeding.
 4. Adapt [pig-deployment.yaml](pig-deployment.yaml): paste exactly one native
-   storage block from the output, set hosted installation/repository/model values,
+   storage block from the output, set hosted installation and model values,
    and apply it through GitOps. PIG manages its generated workloads thereafter.
-5. Enroll a real host, ingest a trace, and verify the exact canonical object,
+5. Select instruction repositories in Promptless Settings.
+6. Enroll a real host, ingest a trace, and verify the exact canonical object,
    succeeded analysis, and Dashboard synchronization. See [the contract](../CONTRACT.md).
 
 Sizing and backup defaults are starting points to review against workload and

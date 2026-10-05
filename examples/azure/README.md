@@ -1,5 +1,9 @@
 # Existing AKS cluster
 
+This cloud is experimental in 0.3.0. Its deployment module and native storage
+adapter are implemented, but the first release validates AWS clean installation
+and canonical acceptance. See [release operations](../../RELEASING.md).
+
 Follow the [shared workflow](../README.md) with AzureRM provider 4.36.0. Supply an
 existing resource group, AKS OIDC issuer with workload identity enabled, delegated
 PostgreSQL subnet, private endpoint subnet, and private PostgreSQL/Blob DNS zones

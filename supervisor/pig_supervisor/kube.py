@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import builtins
-from datetime import datetime, timedelta
+import re
+from datetime import datetime
 from pathlib import Path
 from time import monotonic
 from urllib.parse import quote
@@ -51,9 +52,11 @@ class Kube:
         self.client = client
         self.token_path = token_path
         self.lease_deadline = 0.0
+        self.lease_observations: dict[str, tuple[dict, float]] = {}
 
     def request(self, method: str, path: str, **kwargs) -> dict:
-        if method != "GET" and "/leases" not in path and monotonic() >= self.lease_deadline:
+        lease_request = re.fullmatch(r"/apis/coordination.k8s.io/v1/namespaces/[^/]+/leases(?:/[^/]+)?", path)
+        if method != "GET" and not lease_request and monotonic() >= self.lease_deadline:
             raise KubeError(409, method, path, "controller Lease expired")
         headers = kwargs.pop("headers", {})
         if self.token_path:
@@ -144,10 +147,15 @@ class Kube:
                     return False
                 raise
         previous = lease.get("spec", {})
-        renewed = datetime.fromisoformat(previous.get("renewTime", "1970-01-01T00:00:00Z"))
-        if (
-            previous.get("holderIdentity") != holder
-            and renewed + timedelta(seconds=previous.get("leaseDurationSeconds", 60)) > now
+        # Observe renewals locally: another node's wall clock cannot establish expiry.
+        # https://pkg.go.dev/k8s.io/client-go/tools/leaderelection
+        record = {"uid": lease["metadata"].get("uid"), "spec": previous}
+        observed, observed_at = self.lease_observations.get(namespace, (None, 0.0))
+        if record != observed:
+            observed_at = monotonic()
+            self.lease_observations[namespace] = (record, observed_at)
+        if previous.get("holderIdentity") != holder and monotonic() < observed_at + previous.get(
+            "leaseDurationSeconds", 300
         ):
             return False
         try:

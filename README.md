@@ -9,7 +9,8 @@
 
 # PIG deployment
 
-Deploy Promptless Instruction Governance into an existing EKS, AKS, or GKE cluster.
+Deploy Promptless Instruction Governance into an existing EKS cluster. The 0.3.0
+and 0.3.1 releases target AWS; Azure/AKS and GCP/GKE support is experimental.
 Terraform provisions the customer database, native object storage, network access,
 workload identity, and recovery settings. A namespace-scoped supervisor installs
 and updates the analyzer from immutable releases.
@@ -24,11 +25,12 @@ source. Analyzer application source is maintained separately.
 - [Deployment contract](CONTRACT.md): release policy, credentials, recovery,
   capacity acknowledgement, and acceptance.
 - [Release operations](RELEASING.md): artifact integrity, publication gates, and
-  engineering validation still required before the first release.
+  release acceptance.
 - [Customer guides](https://promptless.ai/docs/governance/deploy-the-worker/plan-your-deployment/).
 
-The source implements the **0.3.0 candidate**. No installable release is implied
-by this checkout: `catalog/stable.json` starts empty. A release becomes eligible
+The [stable catalog](catalog/stable.json) lists published releases. Version 0.3.1
+uses an explicit [AWS-only owner sign-off](releases/acceptance/0.3.1.json) in place
+of stored acceptance reports. A release becomes eligible
 for automatic updates only after accepted images and charts are publicly
 available and its reviewed catalog promotion is merged. Do not use the existing
 0.2.0 worker image for the supervisor contract.
@@ -40,14 +42,14 @@ available and its reviewed catalog promotion is merged. Do not use the existing
 | `modules/{aws,azure,gcp}` | Cloud resources for an existing cluster and network |
 | `examples/{aws,azure,gcp}` | Locked providers, remote state, and local module references |
 | `charts/pig-supervisor` | One-time bootstrap, CRD, and bounded Kubernetes RBAC |
-| `charts/instruction-hub-worker` | Operator-managed analyzer installation |
+| `charts/pig-trace-analyzer` | Operator-managed analyzer installation |
 | `supervisor/pig_supervisor` | Reconciliation, release verification, and publication tools |
 | `catalog` | Immutable manifests and the stable release index |
 | `releases/requirements` | Reviewed live checks and operator prerequisites |
 | `schemas` | Generated CR, release, and acceptance-evidence schemas |
 
 Published charts live at `oci://ghcr.io/promptless/charts/pig-supervisor` and
-`oci://ghcr.io/promptless/charts/instruction-hub-worker`. Every packaged chart
+`oci://ghcr.io/promptless/charts/pig-trace-analyzer`. Every packaged chart
 contains an immutable image digest. Source charts require an explicit digest.
 
 ## Local validation

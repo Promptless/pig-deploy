@@ -38,8 +38,13 @@ using another ingress controller. See [ingress-nginx request limits](https://kub
 For separate database roles, set `secrets.migrationPostgresDsnKey` to the owner's
 key in the existing Secret. Only the migration Job receives that credential;
 `secrets.customerPostgresDsnKey` supplies application access. Both DSNs require
-`sslmode=verify-full`. Use `instructionHub.postgresCaConfigMapName` and
-`instructionHub.postgresCaConfigMapKey` to mount a private CA.
+`sslmode=verify-full`. To supply a database CA bundle through Kubernetes, create
+its ConfigMap in the analyzer namespace before installing the chart.
+Set `instructionHub.postgresCaConfigMapName` and
+`instructionHub.postgresCaConfigMapKey` to mount its bundle in both the analyzer
+and migration Job as `PGSSLROOTCERT`. For RDS, use the
+[AWS regional CA bundle](../../examples/aws/README.md). The migration hook needs
+the ConfigMap before Helm installs ordinary chart resources.
 
 The chart uses `/readyz` for storage readiness and `/healthz` for process liveness.
 See [storage operations](../../STORAGE.md) for permissions and recovery.

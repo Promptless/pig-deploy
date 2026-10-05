@@ -18,7 +18,10 @@ storage:
 ```
 
 Both DSNs must name the same database endpoint and use `sslmode=verify-full`.
-Use `caConfigMapRef` for a private certificate authority. Preflight and migration
+To supply a database CA bundle through Kubernetes, create its ConfigMap in the
+analyzer namespace before installation. Reference it through
+`spec.storage.postgres.caConfigMapRef`. For RDS, use the
+[regional CA bundle](examples/aws/README.md). Preflight and migration
 Jobs receive the migration credential; serving, verification, and acceptance
 pods receive only the application credential. The migration role must own the
 worker tables and have `CREATE` permission on the `public` schema. For an

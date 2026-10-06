@@ -2,8 +2,9 @@
 
 Create a named analyzer installation in Promptless Settings and deliver its
 credential through `secrets.existingSecretName` and `secrets.installTokenKey`.
-The analyzer and migration Job resolve the installation identity from this
-credential. `instructionHub.runtimeBaseUrl` defaults to
+The analyzer resolves its installation identity from this credential. The migration
+Job uses database credentials and needs no hosted connection.
+`instructionHub.runtimeBaseUrl` defaults to
 `https://api.gopromptless.ai`; override it only for another Promptless environment.
 Credential rotation immediately revokes the previous credential. Update the
 external Secret and restart the analyzer with the replacement credential.
@@ -33,3 +34,17 @@ When exposing trace uploads through ingress-nginx, set
 `gateway.annotations.nginx.ingress.kubernetes.io/proxy-body-size` to `"256m"`
 to match the worker's default request limit. Configure equivalent limits when
 using another ingress controller. See [ingress-nginx request limits](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#custom-max-body-size).
+
+For separate database roles, set `secrets.migrationPostgresDsnKey` to the owner's
+key in the existing Secret. Only the migration Job receives that credential;
+`secrets.customerPostgresDsnKey` supplies application access. Both DSNs require
+`sslmode=verify-full`. To supply a database CA bundle through Kubernetes, create
+its ConfigMap in the analyzer namespace before installing the chart.
+Set `instructionHub.postgresCaConfigMapName` and
+`instructionHub.postgresCaConfigMapKey` to mount its bundle in both the analyzer
+and migration Job as `PGSSLROOTCERT`. For RDS, use the
+[AWS regional CA bundle](../../examples/aws/README.md). The migration hook needs
+the ConfigMap before Helm installs ordinary chart resources.
+
+The chart uses `/readyz` for storage readiness and `/healthz` for process liveness.
+See [storage operations](../../STORAGE.md) for permissions and recovery.

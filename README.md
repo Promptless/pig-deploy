@@ -24,9 +24,14 @@ source. Analyzer application source is maintained separately.
   remote state, Terraform ownership, and the Kubernetes handoff.
 - [Deployment contract](CONTRACT.md): release policy, credentials, recovery,
   capacity acknowledgement, and acceptance.
+- [Storage operations](STORAGE.md): database roles, diagnostics, retention, and recovery.
 - [Release operations](RELEASING.md): artifact integrity, publication gates, and
   release acceptance.
 - [Customer guides](https://promptless.ai/docs/governance/deploy-the-worker/plan-your-deployment/).
+
+The source prepares **0.3.2**, which adds storage hardening and targets schema
+revision 4. The [AWS unattended update test](catalog/testing/aws-updates/README.md)
+retains its pinned schema-3 candidates.
 
 The [stable catalog](catalog/stable.json) lists published releases. Version 0.3.1
 uses an explicit [AWS-only owner sign-off](releases/acceptance/0.3.1.json) in place

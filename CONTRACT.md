@@ -111,8 +111,8 @@ existing analyzer to zero and waits for its Pods to exit before migration. It
 starts a single analyzer replica afterwards. Jobs use immutable images and names
 bound to the release, configuration, and saved transition ID. A new transition runs
 fresh checks rather than reusing an earlier successful Job. PostgreSQL records
-schema checksums and release checkpoints in `pig_schema_migrations` and
-`pig_deployment_history`. A restart resumes the saved
+the Alembic revision in `pig_alembic_version`, historical checksums in
+`pig_schema_migrations`, and release checkpoints in `pig_deployment_history`. A restart resumes the saved
 transition; a failed Job retries after the operator corrects its cause.
 
 Live checks include PostgreSQL version, schema compatibility, verified TLS,
@@ -139,6 +139,18 @@ provenance and includes the earlier native-location migration that preserves tra
 data while removing the duplicate location column and synchronization objects.
 Their `destructiveMigration: false` declaration does not permit restarting older
 images. Use a schema-3-compatible image or forward repair after migration.
+
+The 0.3.2 candidate targets schema revision 4. It adopts validated predecessor
+schemas without resetting data and adds persistent canonical-object retries.
+Use a schema-4-compatible image or forward repair after migration. The worker
+requires the exact image schema before serving uploads or starting analyses.
+Readiness checks storage separately from process liveness.
+
+Optional `storage.postgres.migrationDsnSecretRef` supplies an owner credential
+only to preflight and migration Jobs. The serving application credential can
+remain restricted to data access. Both identities must reach the same database
+with verified TLS. See [storage operations](STORAGE.md) for grants, retention,
+and coordinated database and object recovery.
 
 ## Release-specific confirmation
 

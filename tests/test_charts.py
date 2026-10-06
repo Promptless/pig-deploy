@@ -48,6 +48,29 @@ def render(chart, values, tmp_path, release="acme"):
     return list(yaml.safe_load_all(output.stdout))
 
 
+def test_manual_chart_isolates_migration_credentials_and_checks_storage_readiness(worker_values, tmp_path):
+    """Rendered serving pods use app credentials and readiness distinct from liveness."""
+    worker_values["secrets"] = {"existingSecretName": "pig-credentials", "migrationPostgresDsnKey": "migration-dsn"}
+    docs = render("pig-trace-analyzer", worker_values, tmp_path)
+    deployment = next(doc for doc in docs if doc["kind"] == "Deployment")
+    job = next(doc for doc in docs if doc["kind"] == "Job")
+    serving = deployment["spec"]["template"]["spec"]["containers"][0]
+    migration = job["spec"]["template"]["spec"]["containers"][0]
+    serving_env = {entry["name"]: entry for entry in serving["env"]}
+    migration_env = {entry["name"]: entry for entry in migration["env"]}
+    assert "INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN" not in serving_env
+    assert migration_env["INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN"]["valueFrom"]["secretKeyRef"] == {
+        "name": "pig-credentials",
+        "key": "migration-dsn",
+    }
+    assert (
+        serving_env["INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN"] == migration_env["INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN"]
+    )
+    assert serving["readinessProbe"]["httpGet"]["path"] == "/readyz"
+    assert serving["livenessProbe"]["httpGet"]["path"] == "/healthz"
+    assert serving["startupProbe"]["httpGet"]["path"] == "/healthz"
+
+
 @pytest.mark.parametrize(
     "release,override",
     [("acme", None), ("customer-production-us-east-2-pig", None), ("a" * 53, None), ("acme", "x" * 54 + "-suffix")],

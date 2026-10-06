@@ -299,6 +299,10 @@
     "secrets": {
       "type": "object",
       "properties": {
+        "migrationPostgresDsnKey": {
+          "type": "string",
+          "default": ""
+        },
         "analysisModelApiKeyKey": {
           "type": "string"
         },

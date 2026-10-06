@@ -1,0 +1,40 @@
+{
+  "version": "0.3.2",
+  "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:d8e24dd318514d2078306dbad97fe657cabd6831f0a65982c239127d68295c17",
+  "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:e699e1c007e32cd416f8e5c3ef4dac0d75312d5859e11e1a79edf5fb96922e3f",
+  "requirements": {
+    "kubernetesMin": "1.30.0",
+    "postgresMin": 15,
+    "postgresMax": 18,
+    "operatorCapacityRequirements": [],
+    "capacityConfirmationMaxAgeHours": 24,
+    "storageBackends": [
+      "s3",
+      "azureBlob",
+      "gcs"
+    ],
+    "capabilities": [
+      "native-storage-v1",
+      "migration-ledger-v1",
+      "installation-identity-v1",
+      "alembic-migrations-v1",
+      "storage-readiness-v1",
+      "controller-self-update-v1",
+      "crd-update-v1"
+    ],
+    "destructiveMigration": false,
+    "schemaFrom": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "schemaTo": 4,
+    "controllerProtocol": 1
+  },
+  "rollbackTo": [],
+  "crd": {
+    "url": "https://raw.githubusercontent.com/Promptless/pig-deploy/0453f437a4a5c5f40549e9d2a422d6c4a3386cda/charts/pig-supervisor/crds/pigdeployments.yaml",
+    "sha256": "31fa4c66b4f598359c9a526dfa1dbd6b8512f7e5d5b37804ad47d98d3d3cb850"
+  }
+}

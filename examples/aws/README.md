@@ -20,10 +20,19 @@ S3 with 90 days of noncurrent object recovery. Current objects are retained unle
 Terraform prevents database and bucket destruction. Review the full
 [inputs](variables.tf) and [module](../../modules/aws/main.tf).
 
-Use the current RDS regional/root CA bundle in your customer CA ConfigMap. Build
-the DSN with the output hostname and `sslmode=verify-full`. AWS state uses the
-existing encrypted S3 backend with `use_lockfile=true`; operators need lock-object
-permissions as well as state access. Backend and application KMS keys are separate.
+Build the DSN with the output hostname and `sslmode=verify-full`. Download the
+[RDS root CA bundle for the database's region](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html)
+and create a ConfigMap in the analyzer namespace before applying `PIGDeployment`
+or installing the manual chart. The [deployment example](../pig-deployment.yaml)
+references `pig-postgres-ca` with key `ca.pem` through
+`spec.storage.postgres.caConfigMapRef`. For the manual chart, set
+`instructionHub.postgresCaConfigMapName` and `instructionHub.postgresCaConfigMapKey`.
+The analyzer and maintenance Jobs use the bundle to verify the RDS certificate
+and hostname. `sslmode=require` does not satisfy the analyzer's TLS requirement.
+
+AWS state uses the existing encrypted S3 backend with `use_lockfile=true`.
+Operators need lock-object permissions as well as state access. Backend and
+application KMS keys are separate.
 
 ## HTTPS through an Application Load Balancer
 

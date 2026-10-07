@@ -1,7 +1,7 @@
 # Release operations
 
-The source prepares version 0.3.3 with the analyzer's NUL ingestion repair. The stable catalog selects
-the published 0.3.1 release. Local tests are not installation acceptance. Versions 0.3.0
+Version 0.3.3 includes the analyzer's NUL ingestion repair. The [stable catalog](catalog/stable.json)
+selects published releases. Local tests are not installation acceptance. Versions 0.3.0
 and 0.3.1 are AWS-only releases. Report-backed acceptance covers a real AWS clean
 installation and canonical pipeline, plus the unattended 0.3.0 to 0.3.1 patch update
 for 0.3.1. Versions 0.3.1 and 0.3.3 may use the explicit AWS-only owner sign-off

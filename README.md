@@ -10,7 +10,7 @@
 # PIG deployment
 
 Deploy Promptless Instruction Governance into an existing EKS cluster. Releases
-0.3.0 and 0.3.1 and the planned 0.3.3 publication target AWS. Azure/AKS and GCP/GKE
+0.3.0, 0.3.1, and 0.3.3 target AWS. Azure/AKS and GCP/GKE
 support is experimental.
 Terraform provisions the customer database, native object storage, network access,
 workload identity, and recovery settings. A namespace-scoped supervisor installs
@@ -30,14 +30,14 @@ source. Analyzer application source is maintained separately.
   release acceptance.
 - [Customer guides](https://promptless.ai/docs/governance/deploy-the-worker/plan-your-deployment/).
 
-The source prepares **0.3.3**, which includes the analyzer's NUL ingestion repair
+Version **0.3.3** includes the analyzer's NUL ingestion repair
 and targets schema revision 4. The [AWS unattended update test](catalog/testing/aws-updates/README.md)
 retains its pinned schema-3 candidates. The 0.3.3 AWS-only owner-signoff exception
 leaves live analysis acceptance pending and does not certify cloud lifecycle checks.
 
-The [stable catalog](catalog/stable.json) lists published releases. Version 0.3.1
-uses an explicit [AWS-only owner sign-off](releases/acceptance/0.3.1.json) in place
-of stored acceptance reports. A release becomes eligible
+The [stable catalog](catalog/stable.json) lists published releases. Versions [0.3.1](releases/acceptance/0.3.1.json)
+and [0.3.3](releases/acceptance/0.3.3.json) use explicit AWS-only owner sign-off
+in place of stored acceptance reports. A release becomes eligible
 for automatic updates only after accepted images and charts are publicly
 available and its reviewed catalog promotion is merged. Do not use the existing
 0.2.0 worker image for the supervisor contract.

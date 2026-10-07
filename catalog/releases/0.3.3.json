@@ -1,0 +1,58 @@
+{
+  "version": "0.3.3",
+  "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:db7ba6dafc5c59fe8caa454273ced5c4deafcdc9bf82e564ae5b694ee8a0bc84",
+  "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:af521097bd3abd7732eb430e28c8435924e7a956d64dabcf5dc84f81f894e6a1",
+  "requirements": {
+    "kubernetesMin": "1.30.0",
+    "postgresMin": 15,
+    "postgresMax": 18,
+    "operatorCapacityRequirements": [],
+    "capacityConfirmationMaxAgeHours": 24,
+    "storageBackends": [
+      "s3",
+      "azureBlob",
+      "gcs"
+    ],
+    "capabilities": [
+      "native-storage-v1",
+      "migration-ledger-v1",
+      "installation-identity-v1",
+      "alembic-migrations-v1",
+      "storage-readiness-v1",
+      "controller-self-update-v1",
+      "crd-update-v1"
+    ],
+    "recoveryMaxAgeHours": null,
+    "destructiveMigration": false,
+    "schemaFrom": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "schemaTo": 4,
+    "controllerProtocol": 1
+  },
+  "rollbackTo": [],
+  "crd": {
+    "url": "https://raw.githubusercontent.com/Promptless/pig-deploy/07f00246e1c1524202f6849ea1826732a9dafbe4/charts/pig-supervisor/crds/pigdeployments.yaml",
+    "sha256": "31fa4c66b4f598359c9a526dfa1dbd6b8512f7e5d5b37804ad47d98d3d3cb850"
+  },
+  "artifacts": {
+    "sourceCommit": "07f00246e1c1524202f6849ea1826732a9dafbe4",
+    "terraformArchiveURL": "https://github.com/Promptless/pig-deploy/releases/download/v0.3.3/pig-deploy-0.3.3.tar.gz",
+    "terraformArchiveSha256": "c527c389c973a3427617f3072c090588e278ec696128029db4841595160b0f59",
+    "supervisorChart": {
+      "repository": "oci://ghcr.io/promptless/charts/pig-supervisor",
+      "version": "0.3.3",
+      "sha256": "4f174573839e944b90ca65a14b8f86db4b77d82a5a6acc9070df2921c0598306",
+      "ociDigest": "sha256:0c0ab9082fd708fc875a7b06976ae86dd60b0217d8b9b3181681f8e7a54b6f37"
+    },
+    "workerChart": {
+      "repository": "oci://ghcr.io/promptless/charts/pig-trace-analyzer",
+      "version": "0.3.3",
+      "sha256": "ef90972f335035527b27dcf1f186e48cc6d688811e28d00fbc7f6aae18e78044",
+      "ociDigest": "sha256:68b208f1179f50d58073c00397bd55a33c6201ecba720224471a1ddf6151f5a7"
+    }
+  }
+}

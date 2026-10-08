@@ -1,0 +1,14 @@
+{
+  "version": "0.3.3",
+  "sourceCommit": "07f00246e1c1524202f6849ea1826732a9dafbe4",
+  "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:db7ba6dafc5c59fe8caa454273ced5c4deafcdc9bf82e564ae5b694ee8a0bc84",
+  "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:af521097bd3abd7732eb430e28c8435924e7a956d64dabcf5dc84f81f894e6a1",
+  "requirementsDigest": "0ad8a77abb6ff6a53a2a5ce50ec3df7c62a33bd53d63553568d0dac1d799039f",
+  "rollbackTo": [],
+  "ownerSignOff": {
+    "approvedBy": "adit-chandra",
+    "approvedAt": "2026-10-07T00:36:55Z",
+    "scope": "aws-only",
+    "statement": "The release owner explicitly requested stable publication of 0.3.3 and selected an AWS-only owner-approved exception in place of stored acceptance reports. Canonical trace analysis acceptance remains pending because analysis is disabled by operator decision. This approval does not establish exact-artifact clean installation, successful analysis and Dashboard acknowledgement, minor or major upgrades, pause/pin, blocked resume, secret rotation, supervisor self-update, or recovery acceptance. No tested rollback paths are advertised. Azure and GCP remain experimental and unvalidated by this approval."
+  }
+}

@@ -40,6 +40,9 @@ gateway:
   - path: /v0/host-enrollment/check-ins
     pathType: Exact
     servicePortName: http
+  - path: /v0/cloud-enrollment/leases
+    pathType: Exact
+    servicePortName: http
   - path: /v0/traces/batches
     pathType: Exact
     servicePortName: http

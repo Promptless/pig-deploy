@@ -36,9 +36,11 @@ module in another root, use its Git URL with the release's full source commit as
 1. Create the analyzer namespace and customer-owned `pig-analyzer` ServiceAccount.
    Apply the output's `service_account_annotations` to that account. Retain
    `pod_labels` in the PIGDeployment, especially Azure's workload-identity label.
-2. Deliver the referenced credentials and CA ConfigMap. Configure existing ingress,
-   DNS, and TLS for the analyzer endpoint. Allow the worker's PostgreSQL, object
-   storage, hosted API, repository, and selected model traffic.
+2. Deliver the referenced credentials and CA ConfigMap. Provide a network path
+   from enrolled hosts to the private analyzer Service. Enable [optional HTTPS
+   ingress](../CONTRACT.md#optional-https-ingress) with DNS and TLS when needed,
+   including for cloud agents without private network access. Allow the worker's
+   PostgreSQL, object storage, hosted API, repository, and selected model traffic.
 3. Bootstrap the published `pig-supervisor` chart once in `pig-system`, with
    `watchNamespace: pig` and its pinned chart version. If Flux performed bootstrap,
    suspend its HelmRelease before proceeding.

@@ -141,6 +141,30 @@ func TestKubernetes(t *testing.T) {
 			t.Fatal("adopted another installation's resource", err)
 		}
 	})
+	t.Run("owned_ingress_removal", func(t *testing.T) {
+		spec, err := ParseSpec(child(d, "spec"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		spec.Endpoint = Endpoint{Enabled: true, Hostname: "pig.example.com", IngressClassName: "nginx", IngressAnnotations: map[string]string{}}
+		ingress := AnalyzerResources(d, spec, Release{}, "hash")[2]
+		child(ingress, "metadata")["finalizers"] = []any{"governance.promptless.ai/test"}
+		if _, err = kube.Apply(ctx, ingress); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = kube.DeleteOwnedIngress(ctx, "pig-ci", "integration-analyzer", "another-owner"); statusCode(err) != 409 {
+			t.Fatal("foreign ingress deletion allowed", err)
+		}
+		if deleted, err := kube.DeleteOwnedIngress(ctx, "pig-ci", "integration-analyzer", str(child(d, "metadata"), "uid")); err != nil || deleted {
+			t.Fatal("finalizer ignored or deletion denied", deleted, err)
+		}
+		if _, err = kube.Patch(ctx, "Ingress", "pig-ci", "integration-analyzer", Obj{"metadata": Obj{"finalizers": nil}}); err != nil {
+			t.Fatal(err)
+		}
+		if deleted, err := kube.DeleteOwnedIngress(ctx, "pig-ci", "integration-analyzer", str(child(d, "metadata"), "uid")); err != nil || !deleted {
+			t.Fatal("ingress did not disappear", deleted, err)
+		}
+	})
 	t.Run("bounded_rbac", func(t *testing.T) {
 		for _, test := range []struct{ kind, namespace, name string }{{"Secret", "pig-ci", "credentials"}, {"ServiceAccount", "pig-ci", "identity"}, {"CustomResourceDefinition", "", "other.example.com"}} {
 			if _, err := kube.Patch(ctx, test.kind, test.namespace, test.name, Obj{}); statusCode(err) != 403 {

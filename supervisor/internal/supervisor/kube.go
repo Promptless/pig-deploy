@@ -184,6 +184,35 @@ func (k *Kube) Status(ctx context.Context, deployment, status Obj) error {
 	obj := kubeObject("PIGDeployment", str(metadata, "namespace"), str(metadata, "name"))
 	return safeKubeError(k.Client.Status().Patch(ctx, obj, client.RawPatch(types.MergePatchType, data)), "PATCH", "PIGDeployment/status")
 }
+
+// DeleteOwnedIngress waits for disappearance, including finalizers. Both UID and
+// resourceVersion preconditions protect replacements and concurrent owner edits.
+func (k *Kube) DeleteOwnedIngress(ctx context.Context, namespace, name, ownerUID string) (bool, error) {
+	existing, err := k.Get(ctx, "Ingress", namespace, name)
+	if err != nil || existing == nil {
+		return err == nil, err
+	}
+	metadata := child(existing, "metadata")
+	owned := false
+	for _, value := range items(metadata["ownerReferences"]) {
+		owner := object(value)
+		if str(owner, "uid") == ownerUID && owner["controller"] == true {
+			owned = true
+		}
+	}
+	if !owned {
+		return false, &KubeError{409, "DELETE", "Ingress", ": Ingress belongs to a different owner"}
+	}
+	if str(metadata, "deletionTimestamp") == "" {
+		uid, resourceVersion := types.UID(str(metadata, "uid")), str(metadata, "resourceVersion")
+		err = k.Client.Delete(ctx, kubeObject("Ingress", namespace, name), client.Preconditions{UID: &uid, ResourceVersion: &resourceVersion})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, safeKubeError(err, "DELETE", "Ingress")
+		}
+	}
+	existing, err = k.Get(ctx, "Ingress", namespace, name)
+	return err == nil && existing == nil, err
+}
 func (k *Kube) Request(ctx context.Context, method, path string, body Obj) (Obj, error) {
 	if path == crdPath {
 		if method == "GET" {

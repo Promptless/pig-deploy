@@ -121,7 +121,7 @@ func TestManagerReconcilesWithBootstrapPermissionsAndStops(t *testing.T) {
 			body := requestBody(t, r)
 			persisted <- child(body, "status")
 			respondJSON(w, d)
-		case strings.Contains(path, "/helmreleases"):
+		case strings.Contains(path, "/helmreleases"), strings.Contains(path, "/ingresses/"):
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(404)
 			respondJSON(w, Obj{"kind": "Status", "apiVersion": "v1", "code": 404, "reason": "NotFound"})

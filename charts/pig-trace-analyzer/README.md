@@ -30,11 +30,6 @@ Set `nodeSelector` to apply the same node placement to the analyzer and migratio
 Job. Follow the [GKE example](../../examples/gcp/README.md) for Standard clusters
 that use workload identity.
 
-When exposing trace uploads through ingress-nginx, set
-`gateway.annotations.nginx.ingress.kubernetes.io/proxy-body-size` to `"256m"`
-to match the worker's default request limit. Configure equivalent limits when
-using another ingress controller. See [ingress-nginx request limits](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#custom-max-body-size).
-
 For separate database roles, set `secrets.migrationPostgresDsnKey` to the owner's
 key in the existing Secret. Only the migration Job receives that credential;
 `secrets.customerPostgresDsnKey` supplies application access. Both DSNs require
@@ -48,3 +43,41 @@ the ConfigMap before Helm installs ordinary chart resources.
 
 The chart uses `/readyz` for storage readiness and `/healthz` for process liveness.
 See [storage operations](../../STORAGE.md) for permissions and recovery.
+
+## Optional HTTPS ingress
+
+`gateway.enabled` defaults to `false`, and the Service defaults to `ClusterIP`.
+Cloud agents need an HTTPS endpoint reachable from their sandbox. Claude Tag
+requires a public endpoint because its proxy blocks private IP ranges. Use this
+Ingress or an existing customer gateway to reach the private Service. See
+[the network contract](../../CONTRACT.md#optional-https-ingress) for exact routes,
+authentication requirements, and sandbox verification.
+
+Add this `gateway` block to your chart values for ingress-nginx with a
+customer-managed TLS Secret in the analyzer namespace:
+
+```yaml
+gateway:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "256m"
+  hosts:
+    - host: pig.example.com
+  tls:
+    - hosts:
+        - pig.example.com
+      secretName: pig-tls
+```
+
+Enabled gateways require `hosts` and `tls`. A controller-managed certificate may
+omit `secretName`; retain matching TLS hosts and configure the certificate and
+HTTPS listener through that controller. The chart does not install a controller
+or provision certificates. Configure DNS and disable or redirect HTTP.
+
+The default `gateway.paths` exposes only the five exact collector paths listed
+in the contract. If you customize paths, keep exact matches and exclude admin
+routes. Match the controller's request limit to the worker's trace batch limit,
+which defaults to 256 MiB. See [ingress-nginx request limits](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/#custom-max-body-size).
+Set `gateway.enabled: false` in a Helm upgrade to remove the chart-owned Ingress.

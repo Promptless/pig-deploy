@@ -28,6 +28,7 @@ type Kubernetes interface {
 	List(context.Context, string, string, string) ([]Obj, error)
 	Apply(context.Context, Obj) (Obj, error)
 	Patch(context.Context, string, string, string, Obj) (Obj, error)
+	DeleteOwnedIngress(context.Context, string, string, string) (bool, error)
 	Status(context.Context, Obj, Obj) error
 	Request(context.Context, string, string, Obj) (Obj, error)
 }
@@ -168,6 +169,15 @@ func (c *Controller) reconcile(ctx context.Context, d Obj, population int, now t
 	}
 	if err = c.checkHandoff(ctx); err != nil {
 		return err
+	}
+	if !spec.Endpoint.Enabled {
+		deleted, err := c.Kube.DeleteOwnedIngress(ctx, c.Namespace, name+"-analyzer", str(meta, "uid"))
+		if err != nil {
+			return err
+		}
+		if !deleted {
+			return block("IngressDeleting", "Waiting for the disabled Ingress to finish deletion.")
+		}
 	}
 	hash, err := c.ConfigurationHash(ctx, spec)
 	if err != nil {

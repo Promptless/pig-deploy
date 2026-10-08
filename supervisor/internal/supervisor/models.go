@@ -32,6 +32,7 @@ type Hosted struct {
 	InstallTokenSecretRef SecretRef `json:"installTokenSecretRef"`
 }
 type Endpoint struct {
+	Enabled            bool              `json:"enabled"`
 	Hostname           string            `json:"hostname"`
 	IngressClassName   string            `json:"ingressClassName"`
 	TLSSecretName      *string           `json:"tlsSecretName"`
@@ -178,6 +179,9 @@ func ParseSpec(value Obj) (DeploymentSpec, error) {
 	}
 	if err := decode(value, &s); err != nil {
 		return s, invalid("spec")
+	}
+	if s.Endpoint.Enabled && (s.Endpoint.Hostname == "" || strings.TrimSpace(s.Endpoint.IngressClassName) == "") {
+		return s, invalid("endpoint")
 	}
 	if s.Release.PinnedVersion != "" {
 		if _, err := stableVersion(s.Release.PinnedVersion); err != nil {

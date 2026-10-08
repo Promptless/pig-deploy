@@ -16,11 +16,7 @@ spec:
   hosted:
     installTokenSecretRef: {name: pig-credentials, key: install-token}
   endpoint:
-    hostname: pig.example.com
-    ingressClassName: nginx
-    tlsSecretName: pig-tls
-    ingressAnnotations:
-      nginx.ingress.kubernetes.io/proxy-body-size: "256m"
+    enabled: false # Enable HTTPS for cloud agents; see CONTRACT.md.
   storage:
     postgres:
       # Optional: schema owner used only by preflight and migration Jobs.

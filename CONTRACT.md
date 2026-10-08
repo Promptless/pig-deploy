@@ -62,14 +62,6 @@ and restarts the analyzer. Hosted access is interrupted until that completes.
 Revoking a credential preserves the installation and its history. Issue a replacement
 for that installation to restore access. PIG does not write customer Secrets.
 
-Configure HTTPS for `endpoint.hostname` through the externally managed ingress
-controller. Set `endpoint.tlsSecretName` when the controller reads a Kubernetes
-TLS Secret. Omit it when the controller uses a certificate configured through
-`endpoint.ingressAnnotations` or its own configuration, such as AWS ALB with ACM.
-The generated Ingress retains the TLS hostname without a Secret reference. The
-operator must provide a valid certificate and an HTTPS listener before enrolling
-hosts; the supervisor does not provision certificates or an ingress controller.
-
 Select instruction repositories in Promptless Settings. The analyzer fetches their
 identities and access credentials from the hosted runtime.
 
@@ -88,6 +80,73 @@ identity token refresh. Storage federation does not configure model access.
 The model contract is OpenAI, Azure OpenAI, or Bedrock Mantle, with the supported
 provider URL and API key or Bedrock SigV4 authentication. Terraform examples do
 not grant model permissions or provision model endpoints.
+
+## Optional HTTPS ingress
+
+`spec.endpoint.enabled` defaults to `false`; the entire `endpoint` object may be
+omitted. The analyzer Service is `ClusterIP`. Hosts must reach that Service through
+an existing private network or a customer-managed gateway. Enable the generated
+Ingress only when this installation needs it.
+
+Cloud agents need an HTTPS endpoint reachable from their sandbox's network.
+Claude Tag's Agent Proxy blocks private IP ranges even when the destination host
+is allowed, so a cluster Service or a private VPN endpoint alone cannot serve Tag.
+Use a public HTTPS ingress or a public customer gateway that forwards to the
+private analyzer. Allow the exact hostname and required methods in the channel's
+network policy. See [Claude Tag network access](https://claude.com/docs/claude-tag/admins/add-connections#restrict-by-path-or-method).
+HTTPS reachability does not enroll an agent: the worker must also support cloud
+enrollment, and the collector needs an authorized enrollment credential.
+
+To use an ingress controller with a Kubernetes TLS Secret, replace `spec.endpoint`
+in [the deployment example](examples/pig-deployment.yaml) with this block:
+
+```yaml
+endpoint:
+  enabled: true
+  hostname: pig.example.com
+  ingressClassName: nginx
+  tlsSecretName: pig-tls
+  ingressAnnotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "256m"
+```
+
+The operator supplies the ingress controller, DNS, HTTPS listener, and a valid
+certificate for `pig.example.com`. `pig-tls` is a customer-managed TLS Secret in
+the analyzer namespace. Omit `tlsSecretName` when the controller uses a certificate
+configured through `ingressAnnotations` or its own configuration, such as
+[AWS ALB with ACM](examples/aws/README.md#https-through-an-application-load-balancer).
+The generated Ingress retains the TLS hostname in either case. Disable HTTP or
+redirect it to HTTPS through the controller's settings. Match its request limit
+to the worker's trace batch limit, which defaults to 256 MiB.
+
+The generated Ingress exposes only these exact paths. A customer gateway should
+use the same list and may also restrict methods; Kubernetes Ingress routes paths
+but does not filter HTTP methods.
+
+| Method | Exact path | Purpose |
+| --- | --- | --- |
+| GET | `/healthz` | Process health |
+| GET | `/v0/host-enrollment/policy` | Collector policy |
+| POST | `/v0/host-enrollment/check-ins` | Collector check-in |
+| POST | `/v0/cloud-enrollment/leases` | Cloud enrollment and lease renewal |
+| POST | `/v0/traces/batches` | Trace upload |
+
+Keep worker administration and hosted control-plane routes outside this list.
+Forward collector authentication headers to the worker without logging their
+values. TLS and gateway access controls supplement the worker's authentication.
+Verify the certificate, health response, authenticated policy request, and trace
+upload from the actual cloud sandbox before relying on collection. Readiness or
+a successful local request does not prove cloud reachability or trace persistence.
+
+Setting `enabled: false` removes only the Ingress owned by this `PIGDeployment`,
+including while release updates are paused. The Service and analyzer remain in
+place. If an ingress controller is still processing deletion, reconciliation
+reports `IngressDeleting` and retries. The supervisor refuses to delete another
+owner's Ingress; a customer-managed gateway must be disabled by its own operator.
+Follow [the bootstrap upgrade procedure](UPGRADING.md) when adopting this setting
+on an existing installation. For operator-managed Helm installations, see the
+[manual chart's gateway configuration](charts/pig-trace-analyzer/README.md#optional-https-ingress).
 
 ## Automatic updates
 

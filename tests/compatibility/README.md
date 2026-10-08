@@ -1,12 +1,12 @@
 # Python to Go reconciliation compatibility
 
-`supervisor/internal/supervisor/testdata/python.jsonl.gz` records 1,500
-reconciliations across 86 Python test scenarios at baseline commit
-`2ec62f33c673e23ec2d79d02c9725adee920540d`. It contains synthetic test data only.
+`supervisor/internal/supervisor/testdata/python.jsonl.gz` records 1,569
+reconciliations across 92 Python test scenarios at baseline commit
+`4be20d33e13f7ed27b88f6e90ae248e51a8dfc5b`. It contains synthetic test data only.
 The Go compatibility test replays each reconciliation from durable state,
 checking the sequence of catalog reads, Kubernetes reads, and writes, including
 configuration hashes, immutable Job names, ownership, migration hazards, retry,
-rollback, acceptance, and supervisor self-update.
+rollback, acceptance, optional ingress removal, and supervisor self-update.
 
 The replay supplies the recorded transition UUID. It normalizes equivalent
 timestamp representations, JSON formatting inside `PIG_REQUIREMENTS`, and the

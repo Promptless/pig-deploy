@@ -95,6 +95,10 @@ func (r *replay) Patch(_ context.Context, kind, ns, name string, o Obj) (Obj, er
 	return object(v), e
 }
 func (r *replay) Status(_ context.Context, d, s Obj) error { _, e := r.call("status", d, s); return e }
+func (r *replay) DeleteOwnedIngress(_ context.Context, ns, name, owner string) (bool, error) {
+	v, e := r.call("delete_owned_ingress", ns, name, owner)
+	return v == true, e
+}
 func (r *replay) Request(_ context.Context, method, path string, o Obj) (Obj, error) {
 	v, e := r.call("request", method, path, o)
 	return object(v), e
@@ -190,7 +194,7 @@ func TestPythonReconciliationCompatibility(t *testing.T) {
 	if err = scanner.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if count != 1500 {
-		t.Fatalf("expected 1500 reconciliations, got %d", count)
+	if count != 1569 {
+		t.Fatalf("expected 1569 reconciliations, got %d", count)
 	}
 }

@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ required "ingress.serviceName is required" .Values.ingress.serviceName }}
+  namespace: {{ .Values.watchNamespace }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ required "ingress.ingressClassName is required" .Values.ingress.ingressClassName | quote }}
+  tls:
+    - hosts:
+        - {{ required "ingress.hostname is required" .Values.ingress.hostname | quote }}
+      {{- with .Values.ingress.tlsSecretName }}
+      secretName: {{ . | quote }}
+      {{- end }}
+  rules:
+    - host: {{ .Values.ingress.hostname | quote }}
+      http:
+        paths:
+          {{- range list "/healthz" "/v0/host-enrollment/policy" "/v0/host-enrollment/check-ins" "/v0/cloud-enrollment/leases" "/v0/traces/batches" }}
+          - path: {{ . }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $.Values.ingress.serviceName }}
+                port:
+                  name: http
+          {{- end }}

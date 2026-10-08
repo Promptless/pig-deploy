@@ -1,0 +1,6 @@
+watchNamespace: pig
+ingress:
+  serviceName: acme-analyzer # Must match the PIGDeployment name plus -analyzer.
+  hostname: pig.example.com
+  ingressClassName: nginx
+  tlsSecretName: pig-tls

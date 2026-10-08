@@ -15,8 +15,6 @@ spec:
   nodeSelector: {} # See examples/gcp/README.md for the GKE Standard identity selector.
   hosted:
     installTokenSecretRef: {name: pig-credentials, key: install-token}
-  endpoint:
-    enabled: false # Enable HTTPS for cloud agents; see CONTRACT.md.
   storage:
     postgres:
       # Optional: schema owner used only by preflight and migration Jobs.

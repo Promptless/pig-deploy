@@ -70,21 +70,6 @@ class Hosted(Contract):
         return value.rstrip("/")
 
 
-class Endpoint(Contract):
-    enabled: bool = False
-    hostname: str = Field(default="", pattern=r"^$|^[a-zA-Z0-9.-]+$")
-    ingress_class_name: str = ""
-    tls_secret_name: Name | None = None
-    ingress_annotations: dict[str, str] = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def enabled_configuration(self) -> Self:
-        """Require an explicit hostname and controller when publishing an endpoint."""
-        if self.enabled and (not self.hostname or not self.ingress_class_name.strip()):
-            raise ValueError("enabled endpoint requires hostname and ingressClassName")
-        return self
-
-
 class Postgres(Contract):
     dsn_secret_ref: SecretRef
     migration_dsn_secret_ref: SecretRef | None = None
@@ -170,7 +155,6 @@ class DeploymentSpec(Contract):
     pod_labels: dict[str, str] = Field(default_factory=dict)
     node_selector: dict[str, str] = Field(default_factory=dict)
     hosted: Hosted
-    endpoint: Endpoint = Field(default_factory=Endpoint)
     storage: Storage
     analysis: Analysis
 

@@ -110,6 +110,11 @@ func TestKubernetes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		kubectl("annotate", "ingress", "integration-analyzer", "-n", "pig-ci", "example.com/network-setting=changed", "--overwrite")
+		afterIngress, err := controller.ConfigurationHash(ctx, spec)
+		if err != nil || before != afterIngress {
+			t.Fatal("ingress annotation change affected analyzer configuration hash", err)
+		}
 		ref := spec.Hosted.InstallTokenSecretRef
 		patch, _ := json.Marshal(Obj{"stringData": Obj{ref.Key: "rotated-placeholder"}})
 		kubectl("patch", "secret", ref.Name, "-n", "pig-ci", "--type=merge", "-p", string(patch))
@@ -141,30 +146,6 @@ func TestKubernetes(t *testing.T) {
 			t.Fatal("adopted another installation's resource", err)
 		}
 	})
-	t.Run("owned_ingress_removal", func(t *testing.T) {
-		spec, err := ParseSpec(child(d, "spec"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		spec.Endpoint = Endpoint{Enabled: true, Hostname: "pig.example.com", IngressClassName: "nginx", IngressAnnotations: map[string]string{}}
-		ingress := AnalyzerResources(d, spec, Release{}, "hash")[2]
-		child(ingress, "metadata")["finalizers"] = []any{"governance.promptless.ai/test"}
-		if _, err = kube.Apply(ctx, ingress); err != nil {
-			t.Fatal(err)
-		}
-		if _, err = kube.DeleteOwnedIngress(ctx, "pig-ci", "integration-analyzer", "another-owner"); statusCode(err) != 409 {
-			t.Fatal("foreign ingress deletion allowed", err)
-		}
-		if deleted, err := kube.DeleteOwnedIngress(ctx, "pig-ci", "integration-analyzer", str(child(d, "metadata"), "uid")); err != nil || deleted {
-			t.Fatal("finalizer ignored or deletion denied", deleted, err)
-		}
-		if _, err = kube.Patch(ctx, "Ingress", "pig-ci", "integration-analyzer", Obj{"metadata": Obj{"finalizers": nil}}); err != nil {
-			t.Fatal(err)
-		}
-		if deleted, err := kube.DeleteOwnedIngress(ctx, "pig-ci", "integration-analyzer", str(child(d, "metadata"), "uid")); err != nil || !deleted {
-			t.Fatal("ingress did not disappear", deleted, err)
-		}
-	})
 	t.Run("bounded_rbac", func(t *testing.T) {
 		for _, test := range []struct{ kind, namespace, name string }{{"Secret", "pig-ci", "credentials"}, {"ServiceAccount", "pig-ci", "identity"}, {"CustomResourceDefinition", "", "other.example.com"}} {
 			if _, err := kube.Patch(ctx, test.kind, test.namespace, test.name, Obj{}); statusCode(err) != 403 {
@@ -186,6 +167,25 @@ func TestKubernetes(t *testing.T) {
 		}
 		if _, err = kube.Request(ctx, "PATCH", crdPath, Obj{"metadata": Obj{"annotations": Obj{"integration": "allowed"}}}); err != nil {
 			t.Fatal("permitted CRD patch failed", err)
+		}
+		for _, method := range []string{"GET", "POST", "PATCH", "DELETE"} {
+			endpoint := config.Host + "/apis/networking.k8s.io/v1/namespaces/pig-ci/ingresses"
+			if method != "POST" {
+				endpoint += "/integration-analyzer"
+			}
+			req, err := http.NewRequestWithContext(ctx, method, endpoint, strings.NewReader(`{}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Type", "application/merge-patch+json")
+			response, err := kube.HTTP.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response.Body.Close()
+			if response.StatusCode != 403 {
+				t.Fatalf("supervisor ingress %s allowed: %d", method, response.StatusCode)
+			}
 		}
 		// The legacy Role deliberately lacks update and watch.
 		if _, err = coordination.Leases("pig-ci").Update(ctx, &coordinationv1.Lease{ObjectMeta: metav1.ObjectMeta{Name: "pig-supervisor"}}, metav1.UpdateOptions{}); !apierrors.IsForbidden(err) {

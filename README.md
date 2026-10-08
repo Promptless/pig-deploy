@@ -10,11 +10,11 @@
 # PIG deployment
 
 Deploy Promptless Instruction Governance into an existing EKS cluster. Releases
-0.3.0, 0.3.1, and 0.3.3 target AWS. Azure/AKS and GCP/GKE
-support is experimental.
+0.3.0, 0.3.1, and 0.3.3 target AWS; 0.3.4 is being prepared for AWS.
+Azure/AKS and GCP/GKE support is experimental.
 Terraform provisions the customer database, native object storage, network access,
-workload identity, and recovery settings. A namespace-scoped supervisor installs
-and updates the analyzer from immutable releases.
+workload identity, and recovery settings. Helm/GitOps owns collector ingress.
+A namespace-scoped supervisor installs and updates the analyzer from immutable releases.
 
 This repository contains intentionally public deployment assets and supervisor
 source. Analyzer application source is maintained separately.
@@ -25,8 +25,8 @@ source. Analyzer application source is maintained separately.
   remote state, Terraform ownership, and the Kubernetes handoff.
 - [Deployment contract](CONTRACT.md): release policy, credentials, recovery,
   capacity acknowledgement, and acceptance.
-- [Optional HTTPS ingress](CONTRACT.md#optional-https-ingress): expose collector
-  routes for Claude Tag and other cloud agents; disabled by default.
+- [HTTPS ingress](CONTRACT.md#https-ingress): required collector endpoint for
+  enrolled hosts and cloud agents.
 - [Storage operations](STORAGE.md): database roles, diagnostics, retention, and recovery.
 - [Release operations](RELEASING.md): artifact integrity, publication gates, and
   release acceptance.
@@ -36,6 +36,12 @@ Version **0.3.3** includes the analyzer's NUL ingestion repair
 and targets schema revision 4. The [AWS unattended update test](catalog/testing/aws-updates/README.md)
 retains its pinned schema-3 candidates. The 0.3.3 AWS-only owner-signoff exception
 leaves live analysis acceptance pending and does not certify cloud lifecycle checks.
+
+Version **0.3.4** prepares the Go supervisor and moves required collector ingress
+to Helm/GitOps while retaining schema revision 4. Its AWS-only owner-signoff policy requires a separate
+approval bound to the exact candidate artifacts. See the [release preparation](releases/0.3.4.md)
+for remaining steps and the required CRD, RBAC, and ingress ownership handoff
+from 0.3.3. Source preparation does not publish or promote a release.
 
 The [stable catalog](catalog/stable.json) lists published releases. Versions [0.3.1](releases/acceptance/0.3.1.json)
 and [0.3.3](releases/acceptance/0.3.3.json) use explicit AWS-only owner sign-off
@@ -50,7 +56,7 @@ available and its reviewed catalog promotion is merged. Do not use the existing
 | --- | --- |
 | `modules/{aws,azure,gcp}` | Cloud resources for an existing cluster and network |
 | `examples/{aws,azure,gcp}` | Locked providers, remote state, and local module references |
-| `charts/pig-supervisor` | One-time bootstrap, CRD, and bounded Kubernetes RBAC |
+| `charts/pig-supervisor` | Supervisor bootstrap, required collector Ingress, CRD, and bounded RBAC |
 | `charts/pig-trace-analyzer` | Operator-managed analyzer installation |
 | `supervisor/cmd`, `supervisor/internal` | Go supervisor process, reconciliation, and Kubernetes client |
 | `supervisor/pig_supervisor` | Python release publication, inspection, and schema tooling |
@@ -69,8 +75,10 @@ uses the existing `pig-supervisor` Lease with resource-version-guarded patches.
 Writes stop before the local Lease deadline; this guard does not provide
 server-side fencing for requests already accepted by Kubernetes.
 
-The Go runtime preserves the existing CR/status, configuration hashes, Job names,
-and release contracts so an update can resume an in-progress installation.
+The Go runtime preserves reconciliation and release safety behavior. The 0.3.4
+ingress ownership split removes `spec.endpoint` and changes the configuration
+hash once; complete active transitions and follow the operator handoff before
+upgrading. Subsequent ingress edits do not revalidate analyzer workloads.
 Python remains the release-publication, inspection, and schema-generation toolchain;
 the runtime image contains no Python. The [compatibility fixtures](tests/compatibility/README.md)
 describe the recorded Python behavior checked by the Go suite.

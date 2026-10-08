@@ -3,8 +3,10 @@
 ## Release support
 
 The 0.3.0 release requires a verified clean installation on AWS/EKS and canonical
-pipeline acceptance through the Dashboard. Version 0.3.1 permits explicit AWS-only
-owner sign-off in place of stored test reports. Azure/AKS and GCP/GKE are experimental.
+pipeline acceptance through the Dashboard. Versions 0.3.1, 0.3.3, and 0.3.4 permit
+explicit AWS-only owner sign-off in place of stored test reports. Each release
+requires its own approval bound to exact artifacts. Azure/AKS and GCP/GKE are
+experimental.
 The lifecycle behavior below is the implementation contract; owner sign-off does
 not establish report-backed validation of upgrades, controller self-update, credential
 rotation, interrupted-migration recovery, or long-lived identity refresh. See

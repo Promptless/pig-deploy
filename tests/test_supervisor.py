@@ -45,7 +45,12 @@ def spec_document():
         "hosted": {
             "installTokenSecretRef": {"name": "pig-credentials", "key": "install-token"},
         },
-        "endpoint": {"hostname": "pig.example.com", "ingressClassName": "nginx", "tlsSecretName": "pig-tls"},
+        "endpoint": {
+            "enabled": True,
+            "hostname": "pig.example.com",
+            "ingressClassName": "nginx",
+            "tlsSecretName": "pig-tls",
+        },
         "storage": {
             "postgres": {
                 "dsnSecretRef": {"name": "pig-credentials", "key": "postgres-dsn"},
@@ -122,6 +127,8 @@ def client_for(*documents):
 
 
 class FakeKube:
+    delete_owned_ingress = Kube.delete_owned_ingress
+
     def __init__(self):
         self.documents: dict[tuple[str, str, str], dict] = {}
         self.applied = []
@@ -175,6 +182,8 @@ class FakeKube:
                 )
         else:
             result["status"] = previous.get("status", {})
+        result["metadata"].setdefault("uid", "resource-uid")
+        result["metadata"].setdefault("resourceVersion", "1")
         self.documents[key] = result
         return result
 
@@ -190,6 +199,9 @@ class FakeKube:
         return resource
 
     def request(self, method, path, **kwargs):
+        if method == "DELETE" and path.endswith("/ingresses/acme-analyzer"):
+            del self.documents[("Ingress", "pig", "acme-analyzer")]
+            return {"status": "Success"}
         assert method == "GET" and path == "/version"
         return {"gitVersion": "v1.32.1-eks-example"}
 
@@ -290,6 +302,77 @@ def test_ingress_supports_secret_and_controller_managed_certificates(tls_secret_
         assert ingress["spec"]["ingressClassName"] == "alb"
     else:
         assert tls["secretName"] == tls_secret_name
+
+
+@pytest.mark.parametrize(
+    "endpoint", [None, {}, {"enabled": False}, {"hostname": "pig.example.com", "ingressClassName": "nginx"}]
+)
+def test_install_without_endpoint_keeps_service_private(endpoint):
+    document = deployment()
+    if endpoint is None:
+        document["spec"].pop("endpoint")
+    else:
+        document["spec"]["endpoint"] = endpoint
+    kube = FakeKube()
+    with client_for(manifest()) as client:
+        reconcile_to_ready(kube, document, client)
+    assert kube.get("Ingress", "pig", "acme-analyzer") is None
+    assert kube.get("Service", "pig", "acme-analyzer")["spec"]["type"] == "ClusterIP"
+
+
+def test_disabling_ingress_removes_only_owned_endpoint_even_while_paused():
+    kube, document = FakeKube(), deployment()
+    with client_for(manifest()) as client:
+        reconcile_to_ready(kube, document, client)
+        assert kube.get("Ingress", "pig", "acme-analyzer") is not None
+        document["spec"]["endpoint"]["enabled"] = False
+        document["spec"]["release"] = {"paused": True}
+        document["metadata"]["generation"] += 1
+        Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor").reconcile(document, 1, NOW)
+    assert kube.get("Ingress", "pig", "acme-analyzer") is None
+    assert kube.get("Service", "pig", "acme-analyzer")["spec"]["type"] == "ClusterIP"
+    assert kube.get("Deployment", "pig", "acme-analyzer") is not None
+
+
+def test_pending_ingress_deletion_blocks_until_controller_finishes():
+    kube, document = FakeKube(), deployment()
+    with client_for(manifest()) as client:
+        reconcile_to_ready(kube, document, client)
+        ingress = kube.get("Ingress", "pig", "acme-analyzer")
+        ingress["metadata"]["deletionTimestamp"] = "2026-10-08T00:00:00Z"
+        document["spec"]["endpoint"]["enabled"] = False
+        controller = Controller(kube, client, CATALOG, "pig", "pig-system", "pig-supervisor")
+        controller.reconcile(document, 1, NOW)
+        assert reason(document) == "IngressDeleting"
+        assert kube.get("Ingress", "pig", "acme-analyzer") == ingress
+        del kube.documents[("Ingress", "pig", "acme-analyzer")]
+        reconcile_to_ready(kube, document, client)
+        assert kube.get("Ingress", "pig", "acme-analyzer") is None
+
+
+@pytest.mark.parametrize("missing", ["hostname", "ingressClassName"])
+def test_enabled_endpoint_requires_host_and_controller(missing):
+    document = spec_document()
+    document["endpoint"].pop(missing)
+    with pytest.raises(ValidationError, match="enabled endpoint requires"):
+        DeploymentSpec.model_validate(document)
+
+
+def test_ingress_exposes_only_exact_collector_routes():
+    document = deployment()
+    resources = analyzer_resources(
+        document, DeploymentSpec.model_validate(document["spec"]), Release.model_validate(manifest()), "hash"
+    )
+    ingress = next(resource for resource in resources if resource["kind"] == "Ingress")
+    paths = ingress["spec"]["rules"][0]["http"]["paths"]
+    assert {path["path"] for path in paths} == {
+        "/healthz",
+        "/v0/host-enrollment/policy",
+        "/v0/host-enrollment/check-ins",
+        "/v0/cloud-enrollment/leases",
+        "/v0/traces/batches",
+    }
+    assert all(path["pathType"] == "Exact" for path in paths)
 
 
 def test_failed_preflight_retries_and_resumes_after_external_fix():

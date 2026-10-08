@@ -74,12 +74,19 @@
     "Endpoint": {
       "additionalProperties": false,
       "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
         "hostname": {
-          "pattern": "^[a-zA-Z0-9.-]+$",
+          "default": "",
+          "pattern": "^$|^[a-zA-Z0-9.-]+$",
           "title": "Hostname",
           "type": "string"
         },
         "ingressClassName": {
+          "default": "",
           "title": "Ingressclassname",
           "type": "string"
         },
@@ -106,10 +113,6 @@
           "type": "object"
         }
       },
-      "required": [
-        "hostname",
-        "ingressClassName"
-      ],
       "title": "Endpoint",
       "type": "object"
     },
@@ -413,7 +416,6 @@
   "required": [
     "serviceAccountName",
     "hosted",
-    "endpoint",
     "storage",
     "analysis"
   ],

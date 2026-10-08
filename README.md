@@ -25,6 +25,8 @@ source. Analyzer application source is maintained separately.
   remote state, Terraform ownership, and the Kubernetes handoff.
 - [Deployment contract](CONTRACT.md): release policy, credentials, recovery,
   capacity acknowledgement, and acceptance.
+- [Optional HTTPS ingress](CONTRACT.md#optional-https-ingress): expose collector
+  routes for Claude Tag and other cloud agents; disabled by default.
 - [Storage operations](STORAGE.md): database roles, diagnostics, retention, and recovery.
 - [Release operations](RELEASING.md): artifact integrity, publication gates, and
   release acceptance.

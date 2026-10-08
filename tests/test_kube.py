@@ -9,6 +9,77 @@ import pytest
 from pig_supervisor.kube import Kube, KubeError, resource_path
 
 
+@pytest.mark.parametrize("delete_status", [200, 202, 404])
+def test_owned_ingress_deletion_uses_preconditions_and_checks_disappearance(delete_status: int) -> None:
+    """A delete acknowledgement is insufficient while finalizers retain the object."""
+    ingress = {
+        "metadata": {
+            "uid": "ingress-uid",
+            "resourceVersion": "7",
+            "ownerReferences": [{"uid": "deployment-uid", "controller": True}],
+        }
+    }
+    exists = True
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal exists
+        assert request.url.path == resource_path("Ingress", "pig", "worker-analyzer")
+        if request.method == "GET":
+            return httpx.Response(200, json=ingress) if exists else httpx.Response(404, json={})
+        assert request.method == "DELETE"
+        assert json.loads(request.content)["preconditions"] == {"uid": "ingress-uid", "resourceVersion": "7"}
+        exists = delete_status == 202
+        if exists:
+            ingress["metadata"]["deletionTimestamp"] = "2026-10-08T00:00:00Z"
+        return httpx.Response(delete_status, json={"status": "Success"})
+
+    with httpx.Client(base_url="https://kubernetes.example", transport=httpx.MockTransport(respond)) as client:
+        kube = Kube(client)
+        kube.lease_deadline = monotonic() + 30
+        assert kube.delete_owned_ingress("pig", "worker-analyzer", "deployment-uid") is (not exists)
+        assert kube.delete_owned_ingress("pig", "worker-analyzer", "deployment-uid") is (not exists)
+
+
+@pytest.mark.parametrize("owners", [[], [{"uid": "different-owner", "controller": True}], [{"uid": "deployment-uid"}]])
+def test_ingress_deletion_rejects_foreign_or_noncontrolling_owner(owners: list[dict]) -> None:
+    """Disabling an endpoint never deletes an operator's same-name resource."""
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        return httpx.Response(200, json={"metadata": {"ownerReferences": owners}})
+
+    with httpx.Client(base_url="https://kubernetes.example", transport=httpx.MockTransport(respond)) as client:
+        kube = Kube(client)
+        kube.lease_deadline = monotonic() + 30
+        with pytest.raises(KubeError, match="different owner"):
+            kube.delete_owned_ingress("pig", "worker-analyzer", "deployment-uid")
+
+
+def test_ingress_delete_conflict_is_not_reported_as_disabled() -> None:
+    """A replaced or edited Ingress must be re-read on a later reconciliation."""
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.method == "DELETE":
+            return httpx.Response(409, json={})
+        return httpx.Response(
+            200,
+            json={
+                "metadata": {
+                    "uid": "ingress-uid",
+                    "resourceVersion": "7",
+                    "ownerReferences": [{"uid": "deployment-uid", "controller": True}],
+                }
+            },
+        )
+
+    with httpx.Client(base_url="https://kubernetes.example", transport=httpx.MockTransport(respond)) as client:
+        kube = Kube(client)
+        kube.lease_deadline = monotonic() + 30
+        with pytest.raises(KubeError) as caught:
+            kube.delete_owned_ingress("pig", "worker-analyzer", "deployment-uid")
+        assert caught.value.status == 409
+
+
 def test_status_patch_removes_completed_transition_fields() -> None:
     deployment = {
         "metadata": {"namespace": "pig", "name": "worker", "resourceVersion": "17"},

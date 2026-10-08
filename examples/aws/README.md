@@ -44,6 +44,7 @@ not provision them. For the supervisor installation, replace `spec.endpoint` in
 
 ```yaml
 endpoint:
+  enabled: true
   hostname: pig.example.com
   ingressClassName: alb
   ingressAnnotations:
@@ -55,6 +56,7 @@ endpoint:
 ```
 
 Omit `tlsSecretName`: ALB terminates TLS using the ACM certificate. Choose an
-internal scheme if all enrolled hosts can reach the private endpoint. Point the
-hostname's DNS record at the provisioned ALB after its targets are healthy, then
+internal scheme if all enrolled hosts can reach the private endpoint. Claude Tag
+needs a public HTTPS endpoint; see [cloud agent ingress](../../CONTRACT.md#optional-https-ingress).
+Point the hostname's DNS record at the provisioned ALB after its targets are healthy, then
 verify HTTPS with the hostname before enrolling a host.

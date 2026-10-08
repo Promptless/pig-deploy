@@ -78,7 +78,7 @@ func TestKubernetes(t *testing.T) {
 		// Admission is exercised as the administrator; the supervisor deliberately
 		// has no permission to modify a customer's PIGDeployment spec.
 		out, err := exec.CommandContext(ctx, "kubectl", "--context", "kind-pig-ci", "patch", "pigdeployment", "integration", "-n", "pig-ci", "--type=merge", "-p", `{"spec":{"serviceAccountName":"INVALID NAME"}}`).CombinedOutput()
-		if err == nil || !strings.Contains(string(out), "Invalid") {
+		if err == nil || !strings.Contains(strings.ToLower(string(out)), "invalid") {
 			t.Fatalf("invalid spec was not rejected by admission: %s", out)
 		}
 		if err = kube.Status(ctx, d, Obj{"phase": "preflight", "attempt": 1, "retryAt": "2026-01-01T00:00:00Z"}); err != nil {

@@ -59,6 +59,7 @@ jobs:
       - name: Lint module and example with cloud provider rules
         env:
           CLOUD: ${{ matrix.cloud }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           config="$GITHUB_WORKSPACE/.github/tflint/$CLOUD.hcl"
           tflint --init --config "$config"

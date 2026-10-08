@@ -6,12 +6,11 @@ resource "azurerm_user_assigned_identity" "analyzer" {
   tags                = var.tags
 }
 resource "azurerm_federated_identity_credential" "analyzer" {
-  name                = "${var.name}-analyzer"
-  parent_id           = azurerm_user_assigned_identity.analyzer.id
-  resource_group_name = var.resource_group_name
-  audience            = ["api://AzureADTokenExchange"]
-  issuer              = var.oidc_issuer_url
-  subject             = "system:serviceaccount:${var.namespace}:${var.service_account_name}"
+  name                      = "${var.name}-analyzer"
+  user_assigned_identity_id = azurerm_user_assigned_identity.analyzer.id
+  audience                  = ["api://AzureADTokenExchange"]
+  issuer                    = var.oidc_issuer_url
+  subject                   = "system:serviceaccount:${var.namespace}:${var.service_account_name}"
 }
 resource "azurerm_storage_account" "traces" {
   name                              = var.storage_account_name

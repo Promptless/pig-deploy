@@ -106,6 +106,39 @@ class Kube:
             },
         )
 
+    def delete_owned_ingress(self, namespace: str, name: str, owner_uid: str) -> bool:
+        """Remove only this deployment's Ingress and report whether deletion is complete."""
+        existing = self.get("Ingress", namespace, name)
+        if existing is None:
+            return True
+        metadata = existing["metadata"]
+        path = resource_path("Ingress", namespace, name)
+        if not any(
+            owner.get("uid") == owner_uid and owner.get("controller") is True
+            for owner in metadata.get("ownerReferences", [])
+        ):
+            raise KubeError(409, "DELETE", path, "Ingress belongs to a different owner")
+        if not metadata.get("deletionTimestamp"):
+            try:
+                # UID/version preconditions protect replacement and ownership races.
+                # https://kubernetes.io/docs/reference/kubernetes-api/definitions/delete-options-v1-meta/
+                self.request(
+                    "DELETE",
+                    path,
+                    json={
+                        "apiVersion": "v1",
+                        "kind": "DeleteOptions",
+                        "preconditions": {
+                            "uid": metadata["uid"],
+                            "resourceVersion": metadata["resourceVersion"],
+                        },
+                    },
+                )
+            except KubeError as exc:
+                if exc.status != 404:
+                    raise
+        return self.get("Ingress", namespace, name) is None
+
     def status(self, deployment: dict, status: dict) -> None:
         """Persist the desired status, explicitly deleting removed fields with a merge patch."""
         metadata = deployment["metadata"]

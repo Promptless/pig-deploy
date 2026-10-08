@@ -1,8 +1,8 @@
 # Operator CRD upgrades
 
 Use this procedure when an accepted release changes required `PIGDeployment`
-fields. The CRD is shared across namespaces. Coordinate every supervisor using it
-before applying the target schema. Automatic updates accept only additive CRD
+fields or bootstrap permissions. The CRD is shared across namespaces. Coordinate
+every supervisor using it before applying the target schema. Automatic updates accept only additive CRD
 changes; [Helm does not upgrade CRDs](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/).
 
 Run these commands from the accepted release's source checkout with the intended
@@ -42,6 +42,12 @@ name for `pig-system` and `pig-supervisor` below.
    [the example](examples/pig-deployment.yaml) for their shape. Select instruction
    repositories in Promptless Settings.
 
+   Set `endpoint.enabled: true` on each deployment that must expose an Ingress,
+   retaining its hostname, ingress class, and TLS configuration. An absent or false
+   setting removes the supervisor-owned Ingress. For private installations, omit
+   `endpoint` or set `enabled: false`. Review [HTTPS requirements](CONTRACT.md#optional-https-ingress)
+   for cloud collectors before choosing the endpoint configuration.
+
    Validate each prepared manifest, replacing `deployment.yaml` with its path:
 
    ```sh
@@ -77,8 +83,13 @@ name for `pig-system` and `pig-supervisor` below.
 6. Start every supervisor with the accepted target image.
 
    Update its bootstrap configuration to the target chart and immutable image
-   digest, preserving its watched namespace and release catalog. Resume deployment
-   GitOps reconciliation. Keep any Flux HelmRelease that competes with supervisor
+   digest, preserving its watched namespace and release catalog. Apply the target
+   chart's Role through its bootstrap owner before starting the image. Disabling
+   ingress requires the namespace Role's `delete` permission on
+   `networking.k8s.io/ingresses`; an image self-update cannot grant that permission.
+   The supervisor checks resource ownership and UID/version preconditions before
+   deletion. Resume deployment GitOps reconciliation. Keep any Flux HelmRelease
+   that competes with supervisor
    self-updates suspended, as required by the [ownership contract](CONTRACT.md#ownership).
 
    Confirm the supervisor acquires its namespace Lease and reconciles the current

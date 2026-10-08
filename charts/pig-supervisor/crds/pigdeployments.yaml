@@ -84,31 +84,6 @@ spec:
                 required:
                 - installTokenSecretRef
                 type: object
-              endpoint:
-                properties:
-                  enabled:
-                    type: boolean
-                  hostname:
-                    pattern: ^$|^[a-zA-Z0-9.-]+$
-                    type: string
-                  ingressClassName:
-                    type: string
-                  tlsSecretName:
-                    maxLength: 63
-                    minLength: 1
-                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                    type: string
-                    nullable: true
-                  ingressAnnotations:
-                    additionalProperties:
-                      type: string
-                    type: object
-                type: object
-                x-kubernetes-validations:
-                - rule: '!has(self.enabled) || !self.enabled || (has(self.hostname)
-                    && size(self.hostname) > 0 && has(self.ingressClassName) && size(self.ingressClassName)
-                    > 0)'
-                  message: enabled endpoint requires hostname and ingressClassName
               storage:
                 properties:
                   postgres:

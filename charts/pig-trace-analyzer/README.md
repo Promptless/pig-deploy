@@ -50,7 +50,7 @@ See [storage operations](../../STORAGE.md) for permissions and recovery.
 Cloud agents need an HTTPS endpoint reachable from their sandbox. Claude Tag
 requires a public endpoint because its proxy blocks private IP ranges. Use this
 Ingress or an existing customer gateway to reach the private Service. See
-[the network contract](../../CONTRACT.md#optional-https-ingress) for exact routes,
+[the network contract](../../CONTRACT.md#https-ingress) for exact routes,
 authentication requirements, and sandbox verification.
 
 Add this `gateway` block to your chart values for ingress-nginx with a

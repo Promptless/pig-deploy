@@ -32,7 +32,7 @@ charts rendered with explicit required values. A failed render fails the job. To
 fail their jobs. Review any future scanner exception with a specific reason and
 scope instead of disabling a scanner or ignoring an entire class of findings.
 The two path-scoped exceptions in [.github/trivyignore.yaml](.github/trivyignore.yaml)
-cover the supervisor's required Service/Ingress permissions and Azure storage's
+cover the supervisor's required Service permissions and Azure storage's
 intentional refusal of a trusted-services firewall bypass.
 
 ## Kubernetes integration
@@ -47,11 +47,14 @@ It does not publish an image or require GHCR credentials. The suite checks:
   and reconciles a new generation while preserving the custom resource.
 - The API rejects an invalid custom resource. Status updates preserve the spec,
   reject stale resource versions, and remove obsolete status fields.
-- Secret rotation changes the configuration hash using real resource versions.
+- Helm adopts a previously PIG-owned Ingress without changing its UID or network
+  spec; deleting PIGDeployment afterwards leaves the Ingress in place.
+- Secret rotation changes the configuration hash using real resource versions;
+  ingress annotation changes leave it unchanged.
 - Server-side apply preserves the allocated Service IP, rejects field-manager
   conflicts, and refuses adoption of a resource belonging to another owner.
 - Competing clients respect the namespace Lease, and the chart's ServiceAccount
-  can update only the intended CRD while forbidden identity, Secret, RBAC, and
+  can update only the intended CRD while forbidden identity, Secret, Ingress, RBAC, and
   cross-namespace operations return authorization errors.
 
 The Lease duration is shortened explicitly in handoff tests to avoid a

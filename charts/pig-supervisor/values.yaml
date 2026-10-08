@@ -10,3 +10,12 @@ resources:
     memory: 128Mi
   limits:
     memory: 256Mi
+# Required collector ingress, owned by Helm rather than the supervisor.
+ingress:
+  # Must equal <PIGDeployment name>-analyzer; also preserves the existing Ingress name.
+  serviceName: ""
+  hostname: ""
+  ingressClassName: ""
+  # Leave empty when the ingress controller manages the certificate (for example, AWS ALB).
+  tlsSecretName: ""
+  annotations: {}

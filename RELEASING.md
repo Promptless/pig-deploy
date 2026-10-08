@@ -1,6 +1,6 @@
 # Release operations
 
-Version 0.3.4 prepares the Go supervisor and optional collector ingress, retaining
+Version 0.3.4 prepares the Go supervisor and Helm-owned collector ingress, retaining
 the schema-4 analyzer contract from 0.3.3. Follow the [0.3.4 preparation](releases/0.3.4.md)
 for candidate selection and the operator handoff from 0.3.3.
 The [stable catalog](catalog/stable.json)

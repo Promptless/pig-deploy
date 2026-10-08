@@ -5,6 +5,11 @@
       "version": "0.3.1",
       "url": "https://raw.githubusercontent.com/Promptless/pig-deploy/9a9058b486395d79c5947f6324c471e5fa19020d/catalog/releases/0.3.1.json",
       "sha256": "cb9306fccb7e293db3b1e31af776f6a4b3de3f79cdb0506a75aff40ece1f717b"
+    },
+    {
+      "version": "0.3.3",
+      "url": "https://raw.githubusercontent.com/Promptless/pig-deploy/c8549f72092892a1691dd78e160230989e514454/catalog/releases/0.3.3.json",
+      "sha256": "04cf656e9fe5c0f33eaae21ff89bbffe5e5c279c4a59058efd462ca79017282e"
     }
   ]
 }

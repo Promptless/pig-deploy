@@ -8,7 +8,7 @@ misconfigurations:
   - id: KSV-0056
     paths: [supervisor.yaml]
     statement: >-
-      The rendered supervisor Role must create and patch analyzer Services and
-      Ingresses in the watched namespace. Unit and real-cluster tests enforce
+      The rendered supervisor Role must create and patch analyzer Services in
+      the watched namespace. It has no Ingress permissions. Unit and real-cluster tests enforce
       its resource and namespace limits. This exception applies only to the
       supervisor render; networking permissions elsewhere remain findings.

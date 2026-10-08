@@ -39,15 +39,15 @@ application KMS keys are separate.
 Install the [AWS Load Balancer Controller](https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/deploy/installation/)
 with its own IAM role, and provision an ACM certificate for the analyzer hostname
 in the ALB's region. These are external prerequisites; this Terraform module does
-not provision them. For the supervisor installation, replace `spec.endpoint` in
-[the deployment example](../pig-deployment.yaml) with:
+not provision them. Configure the supervisor bootstrap chart using
+[Helm values](../supervisor-values.yaml):
 
 ```yaml
-endpoint:
-  enabled: true
+ingress:
+  serviceName: acme-analyzer # <PIGDeployment name>-analyzer
   hostname: pig.example.com
   ingressClassName: alb
-  ingressAnnotations:
+  annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/certificate-arn: REPLACE_ACM_CERTIFICATE_ARN
@@ -57,6 +57,6 @@ endpoint:
 
 Omit `tlsSecretName`: ALB terminates TLS using the ACM certificate. Choose an
 internal scheme if all enrolled hosts can reach the private endpoint. Claude Tag
-needs a public HTTPS endpoint; see [cloud agent ingress](../../CONTRACT.md#optional-https-ingress).
+needs a public HTTPS endpoint; see [cloud agent ingress](../../CONTRACT.md#https-ingress).
 Point the hostname's DNS record at the provisioned ALB after its targets are healthy, then
 verify HTTPS with the hostname before enrolling a host.

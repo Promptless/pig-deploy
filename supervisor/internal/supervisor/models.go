@@ -31,13 +31,6 @@ type Hosted struct {
 	RuntimeURL            string    `json:"runtimeURL"`
 	InstallTokenSecretRef SecretRef `json:"installTokenSecretRef"`
 }
-type Endpoint struct {
-	Enabled            bool              `json:"enabled"`
-	Hostname           string            `json:"hostname"`
-	IngressClassName   string            `json:"ingressClassName"`
-	TLSSecretName      *string           `json:"tlsSecretName"`
-	IngressAnnotations map[string]string `json:"ingressAnnotations"`
-}
 type Postgres struct {
 	DSNSecretRef          SecretRef  `json:"dsnSecretRef"`
 	MigrationDSNSecretRef *SecretRef `json:"migrationDsnSecretRef"`
@@ -81,7 +74,6 @@ type DeploymentSpec struct {
 	PodLabels          map[string]string `json:"podLabels"`
 	NodeSelector       map[string]string `json:"nodeSelector"`
 	Hosted             Hosted            `json:"hosted"`
-	Endpoint           Endpoint          `json:"endpoint"`
 	Storage            Storage           `json:"storage"`
 	Analysis           Analysis          `json:"analysis"`
 }
@@ -173,15 +165,12 @@ func validate(schema *jsonschema.Schema, value any) error {
 }
 
 func ParseSpec(value Obj) (DeploymentSpec, error) {
-	s := DeploymentSpec{Release: ReleasePolicy{Channel: "stable"}, PodLabels: map[string]string{}, NodeSelector: map[string]string{}, Hosted: Hosted{RuntimeURL: "https://api.gopromptless.ai"}, Endpoint: Endpoint{IngressAnnotations: map[string]string{}}, Analysis: Analysis{QuietWindowHours: 0.5}}
+	s := DeploymentSpec{Release: ReleasePolicy{Channel: "stable"}, PodLabels: map[string]string{}, NodeSelector: map[string]string{}, Hosted: Hosted{RuntimeURL: "https://api.gopromptless.ai"}, Analysis: Analysis{QuietWindowHours: 0.5}}
 	if err := validate(deploymentSchema, value); err != nil {
 		return s, err
 	}
 	if err := decode(value, &s); err != nil {
 		return s, invalid("spec")
-	}
-	if s.Endpoint.Enabled && (s.Endpoint.Hostname == "" || strings.TrimSpace(s.Endpoint.IngressClassName) == "") {
-		return s, invalid("endpoint")
 	}
 	if s.Release.PinnedVersion != "" {
 		if _, err := stableVersion(s.Release.PinnedVersion); err != nil {

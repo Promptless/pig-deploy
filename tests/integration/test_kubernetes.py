@@ -2,7 +2,9 @@
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -52,14 +54,14 @@ def wait_for(description, predicate, timeout=120):
     pytest.fail(f"Timed out waiting for {description}")
 
 
-def helm(*args: str) -> str:
+def helm(*args: str, chart: Path = ROOT / "charts/pig-supervisor") -> str:
     repository, digest = os.environ["PIG_TEST_IMAGE"].split("@")
     return command(
         "helm",
         "upgrade",
         "--install",
         NAME,
-        str(ROOT / "charts/pig-supervisor"),
+        str(chart),
         "--kube-context",
         CONTEXT,
         "--namespace",
@@ -71,6 +73,14 @@ def helm(*args: str) -> str:
         f"image.repository={repository}",
         "--set-string",
         f"image.digest={digest}",
+        "--set-string",
+        "ingress.serviceName=integration-analyzer",
+        "--set-string",
+        "ingress.hostname=pig.example.com",
+        "--set-string",
+        "ingress.ingressClassName=nginx",
+        "--set-string",
+        "ingress.tlsSecretName=pig-tls",
         # A paused deployment must not need a reachable catalog.
         "--set-string",
         "releaseCatalogURL=http://127.0.0.1:9/catalog.json",
@@ -82,12 +92,74 @@ def helm(*args: str) -> str:
 
 
 @pytest.fixture(scope="module", autouse=True)
-def cluster():
+def cluster(tmp_path_factory):
     assert "pig-ci" in command("kind", "get", "clusters").splitlines()
     assert os.environ.get("PIG_TEST_IMAGE", "").startswith("pig-registry:5001/pig-supervisor@sha256:")
     apply({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": NAMESPACE}})
-    helm()
+    # Model the previous bootstrap release, whose manifest did not contain an Ingress.
+    temporary = tmp_path_factory.mktemp("ingress-handoff")
+    legacy_chart = temporary / "legacy-chart"
+    shutil.copytree(ROOT / "charts/pig-supervisor", legacy_chart)
+    (legacy_chart / "templates/ingress.yaml").unlink()
+    helm(chart=legacy_chart)
     kubectl("wait", "--for=condition=Established", "crd/pigdeployments.governance.promptless.ai", "--timeout=60s")
+    legacy = yaml.safe_load((ROOT / "examples/pig-deployment.yaml").read_text())
+    legacy["metadata"] = {"name": "integration", "namespace": NAMESPACE}
+    legacy["spec"]["release"] = {"paused": True}
+    deployment = apply(legacy)
+    # Use the rendered network spec, with the ownership of the old supervisor.
+    rendered = command(
+        "helm",
+        "template",
+        NAME,
+        str(ROOT / "charts/pig-supervisor"),
+        "--set-string",
+        f"image.digest={os.environ['PIG_TEST_IMAGE'].split('@')[1]}",
+        "--set-string",
+        f"watchNamespace={NAMESPACE}",
+        "--set-string",
+        "ingress.serviceName=integration-analyzer",
+        "--set-string",
+        "ingress.hostname=pig.example.com",
+        "--set-string",
+        "ingress.ingressClassName=nginx",
+        "--set-string",
+        "ingress.tlsSecretName=pig-tls",
+    )
+    ingress = next(doc for doc in yaml.safe_load_all(rendered) if doc["kind"] == "Ingress")
+    ingress["metadata"]["ownerReferences"] = [
+        {
+            "apiVersion": deployment["apiVersion"],
+            "kind": "PIGDeployment",
+            "name": "integration",
+            "uid": deployment["metadata"]["uid"],
+            "controller": True,
+        }
+    ]
+    ingress = apply(ingress)
+    for name, document in (("ingress", ingress), ("deployment", deployment)):
+        (temporary / f"{name}.json").write_text(json.dumps(document))
+    patch = command(
+        sys.executable,
+        str(ROOT / "scripts/ingress-handoff.py"),
+        "--ingress",
+        str(temporary / "ingress.json"),
+        "--deployment",
+        str(temporary / "deployment.json"),
+        "--release-name",
+        NAME,
+        "--release-namespace",
+        SYSTEM,
+    )
+    kubectl("patch", "ingress", "integration-analyzer", "-n", NAMESPACE, "--type=json", "-p", patch)
+    helm()
+    adopted = read("ingress", "integration-analyzer")
+    assert adopted["metadata"]["uid"] == ingress["metadata"]["uid"]
+    assert adopted["spec"] == ingress["spec"]
+    assert not adopted["metadata"].get("ownerReferences")
+    assert adopted["metadata"]["annotations"]["meta.helm.sh/release-namespace"] == SYSTEM
+    kubectl("delete", "pigdeployment", "integration", "-n", NAMESPACE, "--wait=true")
+    assert read("ingress", "integration-analyzer")["metadata"]["uid"] == ingress["metadata"]["uid"]
     # The workflow deletes the entire kind cluster, including failed-test state.
 
 

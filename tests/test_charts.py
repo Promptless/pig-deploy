@@ -300,21 +300,14 @@ def test_manual_rejects_separate_migration_identity(worker_values: dict[str, obj
         render("pig-trace-analyzer", worker_values, tmp_path)
 
 
-def test_supervisor_grants_no_identity_secret_or_rbac_writes(tmp_path):
-    docs = render("pig-supervisor", {"image": {"digest": DIGEST}}, tmp_path)
-    ingress_rule = next(
-        rule
-        for doc in docs
-        if doc["kind"] == "Role"
-        for rule in doc["rules"]
-        if "ingresses" in rule.get("resources", [])
-    )
-    assert set(ingress_rule["verbs"]) == {"get", "create", "patch", "delete"}
+def test_supervisor_grants_no_identity_secret_ingress_or_rbac_writes(supervisor_values, tmp_path):
+    docs = render("pig-supervisor", supervisor_values, tmp_path)
     for doc in docs:
         if doc["kind"] not in ("Role", "ClusterRole"):
             continue
         for rule in doc["rules"]:
             assert "*" not in rule.get("resources", []) + rule["verbs"]
+            assert "ingresses" not in rule.get("resources", [])
             if set(rule["verbs"]) - {"get", "list", "watch"}:
                 assert not set(rule.get("resources", [])) & {
                     "secrets",
@@ -328,3 +321,61 @@ def test_supervisor_grants_no_identity_secret_or_rbac_writes(tmp_path):
                 assert rule["resourceNames"] == ["pigdeployments.governance.promptless.ai"]
     controller = next(d for d in docs if d["kind"] == "Deployment")
     assert controller["spec"]["strategy"]["type"] == "Recreate"
+
+
+@pytest.fixture
+def supervisor_values():
+    return {
+        "image": {"digest": DIGEST},
+        "watchNamespace": "pig-customer",
+        "ingress": {
+            "serviceName": "acme-analyzer",
+            "hostname": "pig.example.com",
+            "ingressClassName": "nginx",
+        },
+    }
+
+
+@pytest.mark.parametrize("secret_name", ["pig-tls", ""])
+def test_bootstrap_owns_required_ingress(supervisor_values, tmp_path, secret_name):
+    supervisor_values["ingress"].update(
+        tlsSecretName=secret_name, annotations={"example.com/certificate": "controller-managed"}
+    )
+    docs = render("pig-supervisor", supervisor_values, tmp_path)
+    ingress = next(doc for doc in docs if doc["kind"] == "Ingress")
+    assert ingress["metadata"]["name"] == "acme-analyzer"
+    assert ingress["metadata"]["namespace"] == "pig-customer"
+    assert "ownerReferences" not in ingress["metadata"]
+    assert ingress["metadata"]["annotations"] == {"example.com/certificate": "controller-managed"}
+    assert ingress["spec"]["ingressClassName"] == "nginx"
+    tls = {"hosts": ["pig.example.com"]}
+    if secret_name:
+        tls["secretName"] = secret_name
+    assert ingress["spec"]["tls"] == [tls]
+    assert ingress["spec"]["rules"][0]["host"] == "pig.example.com"
+    paths = ingress["spec"]["rules"][0]["http"]["paths"]
+    assert {path["path"] for path in paths} == {
+        "/healthz",
+        "/v0/host-enrollment/policy",
+        "/v0/host-enrollment/check-ins",
+        "/v0/cloud-enrollment/leases",
+        "/v0/traces/batches",
+    }
+    for path in paths:
+        assert path["pathType"] == "Exact"
+        assert path["backend"] == {"service": {"name": "acme-analyzer", "port": {"name": "http"}}}
+
+
+@pytest.mark.parametrize("field", ["serviceName", "hostname", "ingressClassName"])
+def test_bootstrap_requires_ingress_settings(supervisor_values, tmp_path, field):
+    supervisor_values["ingress"][field] = ""
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        render("pig-supervisor", supervisor_values, tmp_path)
+    assert field in (error.value.stdout or "") + (error.value.stderr or "")
+
+
+def test_bootstrap_cannot_disable_ingress(supervisor_values, tmp_path):
+    supervisor_values["ingress"]["enabled"] = False
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        render("pig-supervisor", supervisor_values, tmp_path)
+    assert "enabled" in (error.value.stdout or "") + (error.value.stderr or "")

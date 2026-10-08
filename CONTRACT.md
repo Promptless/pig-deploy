@@ -3,8 +3,10 @@
 ## Release support
 
 The 0.3.0 release requires a verified clean installation on AWS/EKS and canonical
-pipeline acceptance through the Dashboard. Version 0.3.1 permits explicit AWS-only
-owner sign-off in place of stored test reports. Azure/AKS and GCP/GKE are experimental.
+pipeline acceptance through the Dashboard. Versions 0.3.1, 0.3.3, and 0.3.4 permit
+explicit AWS-only owner sign-off in place of stored test reports. Each release
+requires its own approval bound to exact artifacts. Azure/AKS and GCP/GKE are
+experimental.
 The lifecycle behavior below is the implementation contract; owner sign-off does
 not establish report-backed validation of upgrades, controller self-update, credential
 rotation, interrupted-migration recovery, or long-lived identity refresh. See
@@ -35,9 +37,9 @@ Start with a letter and end with a letter or digit so its generated Service name
 meets Kubernetes naming rules.
 
 GitOps owns `PIGDeployment`, external Secret delivery, the analyzer ServiceAccount,
-and public CA ConfigMaps. PIG owns the generated analyzer Deployment, Service,
-Ingress, and maintenance Jobs through Kubernetes owner references. It refuses to
-adopt existing resources owned by another party. Do not reconcile those generated
+and public CA ConfigMaps. Helm/GitOps owns the collector Ingress. PIG owns the
+generated analyzer Deployment, Service, and maintenance Jobs through Kubernetes
+owner references. It refuses to adopt existing resources owned by another party. Do not reconcile those generated
 objects with another controller. Suspend a matching Flux bootstrap HelmRelease
 before creating `PIGDeployment`. Terraform has no Helm or Kubernetes resources.
 
@@ -81,32 +83,34 @@ The model contract is OpenAI, Azure OpenAI, or Bedrock Mantle, with the supporte
 provider URL and API key or Bedrock SigV4 authentication. Terraform examples do
 not grant model permissions or provision model endpoints.
 
-## Optional HTTPS ingress
+## HTTPS ingress
 
-`spec.endpoint.enabled` defaults to `false`; the entire `endpoint` object may be
-omitted. The analyzer Service is `ClusterIP`. Hosts must reach that Service through
-an existing private network or a customer-managed gateway. Enable the generated
-Ingress only when this installation needs it.
+The bootstrap chart always creates the collector Ingress; configure it through
+Helm values or the rendered GitOps manifest. `PIGDeployment` has no endpoint
+settings, and the supervisor has no ingress permissions. The analyzer Service
+remains `ClusterIP`, named `<PIGDeployment name>-analyzer`. Network changes are
+independent of analyzer releases and do not enter its configuration hash.
+Configure DNS and TLS so enrolled hosts can reach the endpoint.
 
 Cloud agents need an HTTPS endpoint reachable from their sandbox's network.
 Claude Tag's Agent Proxy blocks private IP ranges even when the destination host
 is allowed, so a cluster Service or a private VPN endpoint alone cannot serve Tag.
-Use a public HTTPS ingress or a public customer gateway that forwards to the
-private analyzer. Allow the exact hostname and required methods in the channel's
+Configure a public HTTPS ingress for collectors that cannot reach a private
+endpoint. Allow the exact hostname and required methods in the channel's
 network policy. See [Claude Tag network access](https://claude.com/docs/claude-tag/admins/add-connections#restrict-by-path-or-method).
 HTTPS reachability does not enroll an agent: the worker must also support cloud
 enrollment, and the collector needs an authorized enrollment credential.
 
-To use an ingress controller with a Kubernetes TLS Secret, replace `spec.endpoint`
-in [the deployment example](examples/pig-deployment.yaml) with this block:
+To use an ingress controller with a Kubernetes TLS Secret, configure the
+[bootstrap chart values](examples/supervisor-values.yaml):
 
 ```yaml
-endpoint:
-  enabled: true
+ingress:
+  serviceName: acme-analyzer
   hostname: pig.example.com
   ingressClassName: nginx
   tlsSecretName: pig-tls
-  ingressAnnotations:
+  annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "256m"
 ```
@@ -114,7 +118,7 @@ endpoint:
 The operator supplies the ingress controller, DNS, HTTPS listener, and a valid
 certificate for `pig.example.com`. `pig-tls` is a customer-managed TLS Secret in
 the analyzer namespace. Omit `tlsSecretName` when the controller uses a certificate
-configured through `ingressAnnotations` or its own configuration, such as
+configured through `ingress.annotations` or its own configuration, such as
 [AWS ALB with ACM](examples/aws/README.md#https-through-an-application-load-balancer).
 The generated Ingress retains the TLS hostname in either case. Disable HTTP or
 redirect it to HTTPS through the controller's settings. Match its request limit
@@ -139,14 +143,14 @@ Verify the certificate, health response, authenticated policy request, and trace
 upload from the actual cloud sandbox before relying on collection. Readiness or
 a successful local request does not prove cloud reachability or trace persistence.
 
-Setting `enabled: false` removes only the Ingress owned by this `PIGDeployment`,
-including while release updates are paused. The Service and analyzer remain in
-place. If an ingress controller is still processing deletion, reconciliation
-reports `IngressDeleting` and retries. The supervisor refuses to delete another
-owner's Ingress; a customer-managed gateway must be disabled by its own operator.
-Follow [the bootstrap upgrade procedure](UPGRADING.md) when adopting this setting
-on an existing installation. For operator-managed Helm installations, see the
-[manual chart's gateway configuration](charts/pig-trace-analyzer/README.md#optional-https-ingress).
+Pausing or deleting a `PIGDeployment` does not remove the Helm-owned Ingress.
+Its lifecycle belongs to the bootstrap release; uninstalling that release removes
+it. Follow [the ownership handoff](UPGRADING.md) when upgrading an existing
+installation, preserving the same Ingress object and removing its PIGDeployment
+owner reference. Keep the currently accepted supervisor image and catalog in
+bootstrap values before an ingress-only Helm upgrade, so it does not undo a
+supervisor self-update. See the [bootstrap chart](charts/pig-supervisor/README.md)
+and [manual chart's gateway configuration](charts/pig-trace-analyzer/README.md#optional-https-ingress).
 
 ## Automatic updates
 

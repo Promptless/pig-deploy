@@ -88,25 +88,12 @@ func metadata(d Obj, name string) Obj {
 func AnalyzerResources(d Obj, s DeploymentSpec, r Release, hash string) []Obj {
 	name := str(child(d, "metadata"), "name") + "-analyzer"
 	labels := Obj{"app.kubernetes.io/name": name, "app.kubernetes.io/component": "analyzer"}
-	resources := []Obj{
+	return []Obj{
 		{"apiVersion": "apps/v1", "kind": "Deployment", "metadata": metadata(d, name), "spec": Obj{"replicas": 1, "strategy": Obj{"type": "Recreate"}, "selector": Obj{"matchLabels": labels}, "template": podTemplate(s, r, hash, str(child(d, "metadata"), "name"))}},
 		{"apiVersion": "v1", "kind": "Service", "metadata": metadata(d, name), "spec": Obj{"type": "ClusterIP", "selector": labels, "ports": []any{Obj{"name": "http", "port": 8080, "targetPort": "http"}}}},
 	}
-	if !s.Endpoint.Enabled {
-		return resources
-	}
-	tls := Obj{"hosts": []any{s.Endpoint.Hostname}}
-	if s.Endpoint.TLSSecretName != nil {
-		tls["secretName"] = *s.Endpoint.TLSSecretName
-	}
-	paths := []any{}
-	for _, path := range []string{"/healthz", "/v0/host-enrollment/policy", "/v0/host-enrollment/check-ins", "/v0/cloud-enrollment/leases", "/v0/traces/batches"} {
-		paths = append(paths, Obj{"path": path, "pathType": "Exact", "backend": Obj{"service": Obj{"name": name, "port": Obj{"name": "http"}}}})
-	}
-	ingressMeta := metadata(d, name)
-	ingressMeta["annotations"] = asObj(s.Endpoint.IngressAnnotations)
-	return append(resources, Obj{"apiVersion": "networking.k8s.io/v1", "kind": "Ingress", "metadata": ingressMeta, "spec": Obj{"ingressClassName": s.Endpoint.IngressClassName, "tls": []any{tls}, "rules": []any{Obj{"host": s.Endpoint.Hostname, "http": Obj{"paths": paths}}}}})
 }
+
 func JobResource(d Obj, s DeploymentSpec, r Release, digest, hash, phase string, attempt int, transition string) Obj {
 	token := CanonicalDigest([]any{child(d, "metadata")["uid"], digest, hash, phase, attempt, transition})[:16]
 	name := "pig-" + phase + "-" + token

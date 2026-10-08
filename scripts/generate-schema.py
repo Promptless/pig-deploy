@@ -36,12 +36,6 @@ def structural(schema, definitions):
 root = Path(__file__).resolve().parents[1]
 source = DeploymentSpec.model_json_schema(by_alias=True)
 spec = structural(source, source["$defs"])
-spec["properties"]["endpoint"]["x-kubernetes-validations"] = [
-    {
-        "rule": "!has(self.enabled) || !self.enabled || (has(self.hostname) && size(self.hostname) > 0 && has(self.ingressClassName) && size(self.ingressClassName) > 0)",
-        "message": "enabled endpoint requires hostname and ingressClassName",
-    }
-]
 spec["properties"]["storage"]["x-kubernetes-validations"] = [
     {
         "rule": "(has(self.s3) ? 1 : 0) + (has(self.azureBlob) ? 1 : 0) + (has(self.gcs) ? 1 : 0) == 1",

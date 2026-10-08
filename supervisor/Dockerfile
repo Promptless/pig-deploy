@@ -1,11 +1,17 @@
-FROM python:3.14-slim
-RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
-COPY pyproject.toml uv.lock ./
-COPY supervisor ./supervisor
-RUN pip install --no-cache-dir uv==0.8.22 \
-    && uv sync --frozen --no-dev --no-cache \
-    && pip uninstall -y uv pip setuptools wheel
+FROM golang:1.26.8-bookworm AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY schemas ./schemas
+COPY supervisor/cmd ./supervisor/cmd
+COPY supervisor/internal ./supervisor/internal
+COPY pyproject.toml ./
+RUN version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml)" \
+    && test -n "$version" \
+    && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$version" -o /pig-supervisor ./supervisor/cmd/pig-supervisor
+
+FROM scratch
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /pig-supervisor /pig-supervisor
 USER 65532:65532
-ENV PYTHONUNBUFFERED=1 PATH=/app/.venv/bin:$PATH
-ENTRYPOINT ["pig-supervisor"]
+ENTRYPOINT ["/pig-supervisor"]

@@ -22,8 +22,14 @@ jobs:
           version: v3.18.6
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: tests/crd-validation/go.mod
-          cache-dependency-path: tests/crd-validation/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tests/crd-validation/go.sum
+      - run: go mod verify
+      - run: test -z "$(gofmt -l schemas/*.go supervisor/cmd supervisor/internal)"
+      - run: go vet ./...
+      - run: go test -race ./...
       - run: uv sync --frozen
       - run: uv run ruff check supervisor tests scripts
       - run: uv run ruff format --check supervisor tests scripts
@@ -40,7 +46,7 @@ jobs:
       - name: Build supervisor image without publishing
         run: |
           docker build -f supervisor/Dockerfile -t pig-supervisor:test .
-          test "$(docker run --rm pig-supervisor:test --version)" = "$(uv run pig-supervisor --version)"
+          test "$(docker run --rm pig-supervisor:test --version)" = "$(uv run python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
   terraform:
     runs-on: ubuntu-latest
     timeout-minutes: 15

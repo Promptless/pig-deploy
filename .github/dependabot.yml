@@ -29,9 +29,11 @@ updates:
       providers:
         patterns: ['*']
   - package-ecosystem: gomod
-    directory: /tests/crd-validation
+    directories:
+      - /
+      - /tests/crd-validation
     schedule:
       interval: weekly
     groups:
       kubernetes:
-        patterns: ['k8s.io/*']
+        patterns: ['k8s.io/*', 'sigs.k8s.io/controller-runtime']

@@ -1,22 +1,14 @@
 """Exercise the shipped chart and REST client against Kubernetes, without cloud or analyzer credentials."""
 
-import base64
 import json
 import os
-import ssl
 import subprocess
 import time
-from copy import deepcopy
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import httpx
 import pytest
 import yaml
-from pig_supervisor.controller import Controller
-from pig_supervisor.kube import Kube, KubeError, resource_path
 from pig_supervisor.models import DeploymentSpec
-from pig_supervisor.workloads import secret_refs
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTEXT = "kind-pig-ci"
@@ -31,10 +23,10 @@ def command(*args: str, document: dict | None = None) -> str:
         input=json.dumps(document) if document is not None else None,
         capture_output=True,
         text=True,
-        timeout=180,
+        timeout=300,
         check=False,
     )
-    assert result.returncode == 0, f"{args[0]} failed: {result.stderr}"
+    assert result.returncode == 0, f"{args[0]} failed: {result.stderr}\n{result.stdout}"
     return result.stdout
 
 
@@ -113,7 +105,11 @@ def deployment():
         }
     )
     secrets: dict[str, dict[str, str]] = {}
-    for ref in secret_refs(spec):
+    refs = [spec.hosted.install_token_secret_ref, spec.storage.postgres.dsn_secret_ref]
+    refs += [
+        ref for ref in (spec.storage.postgres.migration_dsn_secret_ref, spec.analysis.model.api_key_secret_ref) if ref
+    ]
+    for ref in refs:
         secrets.setdefault(ref.name, {})[ref.key] = "integration-placeholder"
     for name, data in secrets.items():
         apply(
@@ -137,28 +133,6 @@ def deployment():
     result = apply(document)
     yield result
     kubectl("delete", "pigdeployment", "integration", "-n", NAMESPACE, "--wait=true")
-
-
-@pytest.fixture
-def api():
-    # Stop the process before exercising independent contenders with its real identity.
-    kubectl("scale", "deployment", NAME, "-n", SYSTEM, "--replicas=0")
-    wait_for(
-        "supervisor Pods to terminate",
-        lambda: not json.loads(kubectl("get", "pods", "-n", SYSTEM, "-o", "json"))["items"],
-    )
-    kubectl("delete", "lease", NAME, "-n", NAMESPACE, "--ignore-not-found")
-    config = json.loads(kubectl("config", "view", "--minify", "--raw", "--flatten", "-o", "json"))
-    connection = config["clusters"][0]["cluster"]
-    context = ssl.create_default_context(cadata=base64.b64decode(connection["certificate-authority-data"]).decode())
-    token = kubectl("create", "token", NAME, "-n", SYSTEM, "--duration=10m").strip()
-    with httpx.Client(
-        base_url=connection["server"], verify=context, headers={"Authorization": f"Bearer {token}"}, timeout=15
-    ) as client:
-        kube = Kube(client)
-        assert kube.leadership(NAMESPACE, "test-holder", datetime.now(UTC))
-        yield kube
-    kubectl("delete", "lease", NAME, "-n", NAMESPACE, "--ignore-not-found")
 
 
 def test_chart_install_upgrade_and_process_handoff(deployment):
@@ -208,106 +182,12 @@ def test_chart_install_upgrade_and_process_handoff(deployment):
     assert json.loads(kubectl("get", "jobs", "-n", NAMESPACE, "-o", "json"))["items"] == []
 
 
-def test_admission_status_conflict_and_secret_rotation(api, deployment):
-    path = resource_path("PIGDeployment", NAMESPACE, "integration")
-    invalid = deepcopy(deployment)
-    invalid["spec"]["serviceAccountName"] = "INVALID NAME"
-    with pytest.raises(AssertionError, match="spec.serviceAccountName: Invalid value"):
-        apply(invalid)
-    current = api.get("PIGDeployment", NAMESPACE, "integration")
-    api.status(current, {"phase": "preflight", "attempt": 1, "retryAt": "2026-01-01T00:00:00Z"})
-    with pytest.raises(KubeError) as conflict:
-        api.status(current, {"phase": "quiesce"})
-    assert conflict.value.status == 409
-    current = api.get("PIGDeployment", NAMESPACE, "integration")
-    api.status(current, {"phase": "quiesce"})
-    persisted = api.request("GET", path)
-    assert persisted["status"] == {"phase": "quiesce"}
-    assert persisted["spec"] == current["spec"]
-
-    spec = DeploymentSpec.model_validate(deployment["spec"])
-    with httpx.Client() as catalog:
-        controller = Controller(api, catalog, "http://127.0.0.1:9", NAMESPACE, SYSTEM, NAME)
-        before = controller._configuration_hash(spec)
-        ref = spec.hosted.install_token_secret_ref
-        kubectl(
-            "patch",
-            "secret",
-            ref.name,
-            "-n",
-            NAMESPACE,
-            "--type=merge",
-            "-p",
-            json.dumps({"stringData": {ref.key: "rotated-placeholder"}}),
-        )
-        assert controller._configuration_hash(spec) != before
-
-
-def test_server_side_apply_preserves_field_and_resource_ownership(api, deployment):
-    owner = {
-        "apiVersion": deployment["apiVersion"],
-        "kind": "PIGDeployment",
-        "name": "integration",
-        "uid": deployment["metadata"]["uid"],
-    }
-    service = {
-        "apiVersion": "v1",
-        "kind": "Service",
-        "metadata": {"name": "apply-test", "namespace": NAMESPACE, "ownerReferences": [owner]},
-        "spec": {"selector": {"app": "first"}, "ports": [{"port": 80, "targetPort": 8080}]},
-    }
-    first = api.apply(service)
-    service["spec"]["selector"]["app"] = "second"
-    assert api.apply(service)["spec"]["clusterIP"] == first["spec"]["clusterIP"]
-    contender = deepcopy(service)
-    contender["spec"]["selector"]["app"] = "other-manager"
-    with pytest.raises(KubeError) as conflict:
-        api.request(
-            "PATCH",
-            resource_path("Service", NAMESPACE, "apply-test"),
-            json=contender,
-            params={"fieldManager": "another-manager", "force": "false"},
-            headers={"Content-Type": "application/apply-patch+yaml"},
-        )
-    assert conflict.value.status == 409
-    contender["metadata"]["ownerReferences"][0]["uid"] = "00000000-0000-0000-0000-000000000000"
-    with pytest.raises(KubeError, match="different owner"):
-        api.apply(contender)
-    assert api.get("Service", NAMESPACE, "apply-test")["spec"]["selector"]["app"] == "second"
-
-
-def test_real_rbac_and_lease_contenders(api, monkeypatch):
-    elapsed = time.monotonic()
-    monkeypatch.setattr("pig_supervisor.kube.monotonic", lambda: elapsed)
-    now = datetime.now(UTC)
-    contender = Kube(api.client)
-    assert not contender.leadership(NAMESPACE, "second-holder", now)
-    with pytest.raises(KubeError, match="Lease expired"):
-        contender.patch("Service", NAMESPACE, "anything", {"spec": {"selector": {"app": "unauthorized"}}})
-    assert not contender.leadership(NAMESPACE, "second-holder", now + timedelta(days=1))
-    elapsed += 301
-    assert contender.leadership(NAMESPACE, "second-holder", now + timedelta(seconds=301))
-    with pytest.raises(KubeError, match="Lease expired"):
-        api.patch("Service", NAMESPACE, "anything", {"spec": {"selector": {"app": "expired"}}})
-    assert not api.leadership(NAMESPACE, "test-holder", now + timedelta(seconds=302))
-
-    forbidden = [
-        ("PATCH", resource_path("Secret", NAMESPACE, "credentials")),
-        ("PATCH", resource_path("ServiceAccount", NAMESPACE, "identity")),
-        ("POST", f"/apis/rbac.authorization.k8s.io/v1/namespaces/{NAMESPACE}/roles"),
-        ("GET", resource_path("Secret", "default", "outside")),
-        ("PATCH", "/apis/apiextensions.k8s.io/v1/customresourcedefinitions/other.example.com"),
-    ]
-    for method, path in forbidden:
-        with pytest.raises(KubeError) as denied:
-            contender.request(method, path, json={}, headers={"Content-Type": "application/merge-patch+json"})
-        assert denied.value.status == 403, path
-    crd = "/apis/apiextensions.k8s.io/v1/customresourcedefinitions/pigdeployments.governance.promptless.ai"
-    assert contender.request("GET", crd)["spec"]["scope"] == "Namespaced"
-    patched = contender.request(
-        "PATCH",
-        crd,
-        json={"metadata": {"annotations": {"integration": "allowed"}}},
-        headers={"Content-Type": "application/merge-patch+json"},
+def test_go_client_rbac_admission_apply_and_leadership(deployment, monkeypatch):
+    kubectl("scale", "deployment", NAME, "-n", SYSTEM, "--replicas=0")
+    wait_for(
+        "supervisor Pods to terminate",
+        lambda: not json.loads(kubectl("get", "pods", "-n", SYSTEM, "-o", "json"))["items"],
     )
-    assert patched["metadata"]["annotations"]["integration"] == "allowed"
+    kubectl("delete", "lease", NAME, "-n", NAMESPACE, "--ignore-not-found")
+    monkeypatch.setenv("PIG_KUBERNETES_TEST", "1")
+    command("go", "test", "./supervisor/internal/supervisor", "-run", "^TestKubernetes$", "-count=1", "-v")

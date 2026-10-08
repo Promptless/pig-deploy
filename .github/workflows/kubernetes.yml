@@ -49,6 +49,9 @@ jobs:
           docker push pig-registry:5001/pig-supervisor:ci
           image="$(docker inspect --format '{{index .RepoDigests 0}}' pig-registry:5001/pig-supervisor:ci)"
           printf 'PIG_TEST_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
       - run: uv sync --frozen
       - name: Exercise real Helm, RBAC, admission, status, apply and leadership
         run: uv run pytest tests/integration --run-kubernetes -v --junitxml=kubernetes-results.xml

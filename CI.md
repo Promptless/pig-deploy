@@ -13,7 +13,7 @@ are enabled for this repository.
 
 | Check | Coverage |
 | --- | --- |
-| `contracts` | Ruff, unit and chart-render tests, actionlint, generated schemas, Kubernetes CRD validation, Python packaging, and supervisor image smoke test |
+| `contracts` | Go vet and race tests, Python compatibility replay, Ruff, unit and chart-render tests, actionlint, generated schemas, Kubernetes CRD validation, Python packaging, and supervisor image smoke test |
 | `terraform (aws)`, `terraform (azure)`, `terraform (gcp)` | Format, locked-provider initialization, example validation, credential-free mock plans, and TFLint with provider-specific rules |
 | `kubernetes (v1.30.10)`, `kubernetes (v1.37.0)` | Real API, chart installation and upgrade, and supervisor process tests in disposable kind clusters |
 | `dependency-review` | Newly introduced dependencies with high or critical known vulnerabilities |
@@ -21,7 +21,7 @@ are enabled for this repository.
 | `image-security` | High or critical fixable vulnerabilities in the built supervisor image |
 
 All actions use full commit pins. Dependabot opens weekly updates for Actions,
-uv, the container base image, Terraform providers, and the Go admission validator.
+uv, the container base image, Terraform providers, the Go supervisor, and the Go admission validator.
 The security workflow also runs weekly and can be dispatched manually so newly
 disclosed vulnerabilities are checked even when the repository has no new commits.
 Trivy dependency and image scans block high/critical vulnerabilities with an available
@@ -54,7 +54,7 @@ It does not publish an image or require GHCR credentials. The suite checks:
   can update only the intended CRD while forbidden identity, Secret, RBAC, and
   cross-namespace operations return authorization errors.
 
-The Lease expiry timestamp is advanced explicitly in handoff tests to avoid a
+The Lease duration is shortened explicitly in handoff tests to avoid a
 five-minute wait. These checks do not exercise analyzer migrations or prove
 cloud identity, database TLS, trace persistence, analysis, or Dashboard delivery.
 The 0.3.0 publication gate requires real AWS installation and canonical acceptance.
@@ -62,7 +62,12 @@ Version 0.3.1 permits explicit AWS-only owner sign-off in place of stored report
 Azure and GCP remain experimental. Later versions retain the full three-cloud gate
 described in [RELEASING.md](RELEASING.md).
 
-`uv run pytest -q` skips cluster tests. To run them locally, reproduce the
+`go test -race ./...` exercises the supervisor, including the recorded Python
+reconciliation cases, API transport, and patch-only leadership protocol.
+`uv run pytest -q` tests release tooling and chart contracts. Both skip cluster
+tests by default. The Python integration harness installs the chart and invokes
+the Go client tests using a token from the chart's ServiceAccount.
+To run the cluster tests locally, reproduce the
 cluster/registry setup and image build in
 [the Kubernetes workflow](.github/workflows/kubernetes.yml), then run:
 

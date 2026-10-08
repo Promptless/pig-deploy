@@ -52,7 +52,8 @@ available and its reviewed catalog promotion is merged. Do not use the existing
 | `examples/{aws,azure,gcp}` | Locked providers, remote state, and local module references |
 | `charts/pig-supervisor` | One-time bootstrap, CRD, and bounded Kubernetes RBAC |
 | `charts/pig-trace-analyzer` | Operator-managed analyzer installation |
-| `supervisor/pig_supervisor` | Reconciliation, release verification, and publication tools |
+| `supervisor/cmd`, `supervisor/internal` | Go supervisor process, reconciliation, and Kubernetes client |
+| `supervisor/pig_supervisor` | Python release publication, inspection, and schema tooling |
 | `catalog` | Immutable manifests and the stable release index |
 | `releases/requirements` | Reviewed live checks and operator prerequisites |
 | `schemas` | Generated CR, release, and acceptance-evidence schemas |
@@ -61,16 +62,31 @@ Published charts live at `oci://ghcr.io/promptless/charts/pig-supervisor` and
 `oci://ghcr.io/promptless/charts/pig-trace-analyzer`. Every packaged chart
 contains an immutable image digest. Source charts require an explicit digest.
 
+The supervisor runs as a static Go binary with controller-runtime and client-go.
+It polls the namespace every 15 seconds using direct API reads, retaining the
+existing bootstrap RBAC without requiring watches or API discovery. Leadership
+uses the existing `pig-supervisor` Lease with resource-version-guarded patches.
+Writes stop before the local Lease deadline; this guard does not provide
+server-side fencing for requests already accepted by Kubernetes.
+
+The Go runtime preserves the existing CR/status, configuration hashes, Job names,
+and release contracts so an update can resume an in-progress installation.
+Python remains the release-publication, inspection, and schema-generation toolchain;
+the runtime image contains no Python. The [compatibility fixtures](tests/compatibility/README.md)
+describe the recorded Python behavior checked by the Go suite.
+
 ## Local validation
 
 See [CI checks](CI.md) for required pull-request checks, real Kubernetes
 integration tests, security scanning, and local reproduction.
 
 Use Python 3.11+, uv 0.8.22, Helm 3.18.6, Go from
-`tests/crd-validation/go.mod`, and Terraform 1.11.4. Provider versions and
+`go.mod`, and Terraform 1.11.4. Provider versions and
 checksums are committed with each example and module.
 
 ```sh
+go test -race ./...
+go vet ./...
 uv sync --frozen
 uv run ruff check supervisor tests scripts
 uv run ruff format --check supervisor tests scripts

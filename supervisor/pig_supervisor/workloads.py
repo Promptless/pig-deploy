@@ -156,10 +156,7 @@ def analyzer_resources(deployment: dict, spec: DeploymentSpec, release: Release,
     name = deployment["metadata"]["name"] + "-analyzer"
     labels = {"app.kubernetes.io/name": name, "app.kubernetes.io/component": "analyzer"}
     template = pod_template(spec, release, config_hash, deployment["metadata"]["name"])
-    tls: dict[str, object] = {"hosts": [spec.endpoint.hostname]}
-    if spec.endpoint.tls_secret_name is not None:
-        tls["secretName"] = spec.endpoint.tls_secret_name
-    return [
+    resources = [
         {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
@@ -175,8 +172,19 @@ def analyzer_resources(deployment: dict, spec: DeploymentSpec, release: Release,
             "apiVersion": "v1",
             "kind": "Service",
             "metadata": metadata(deployment, name),
-            "spec": {"selector": labels, "ports": [{"name": "http", "port": 8080, "targetPort": "http"}]},
+            "spec": {
+                "type": "ClusterIP",
+                "selector": labels,
+                "ports": [{"name": "http", "port": 8080, "targetPort": "http"}],
+            },
         },
+    ]
+    if not spec.endpoint.enabled:
+        return resources
+    tls: dict[str, object] = {"hosts": [spec.endpoint.hostname]}
+    if spec.endpoint.tls_secret_name is not None:
+        tls["secretName"] = spec.endpoint.tls_secret_name
+    resources.append(
         {
             "apiVersion": "networking.k8s.io/v1",
             "kind": "Ingress",
@@ -198,6 +206,7 @@ def analyzer_resources(deployment: dict, spec: DeploymentSpec, release: Release,
                                     "/healthz",
                                     "/v0/host-enrollment/policy",
                                     "/v0/host-enrollment/check-ins",
+                                    "/v0/cloud-enrollment/leases",
                                     "/v0/traces/batches",
                                 )
                             ]
@@ -205,8 +214,9 @@ def analyzer_resources(deployment: dict, spec: DeploymentSpec, release: Release,
                     }
                 ],
             },
-        },
-    ]
+        }
+    )
+    return resources
 
 
 def job_resource(

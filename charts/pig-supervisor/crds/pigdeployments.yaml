@@ -86,8 +86,10 @@ spec:
                 type: object
               endpoint:
                 properties:
+                  enabled:
+                    type: boolean
                   hostname:
-                    pattern: ^[a-zA-Z0-9.-]+$
+                    pattern: ^$|^[a-zA-Z0-9.-]+$
                     type: string
                   ingressClassName:
                     type: string
@@ -101,10 +103,12 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
-                required:
-                - hostname
-                - ingressClassName
                 type: object
+                x-kubernetes-validations:
+                - rule: '!has(self.enabled) || !self.enabled || (has(self.hostname)
+                    && size(self.hostname) > 0 && has(self.ingressClassName) && size(self.ingressClassName)
+                    > 0)'
+                  message: enabled endpoint requires hostname and ingressClassName
               storage:
                 properties:
                   postgres:
@@ -272,7 +276,6 @@ spec:
             required:
             - serviceAccountName
             - hosted
-            - endpoint
             - storage
             - analysis
             type: object

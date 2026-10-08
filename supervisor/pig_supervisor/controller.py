@@ -181,6 +181,10 @@ class Controller:
                 )
             spec = DeploymentSpec.model_validate(deployment["spec"])
             self._check_handoff()
+            if not spec.endpoint.enabled and not self.kube.delete_owned_ingress(
+                self.namespace, name + "-analyzer", deployment["metadata"]["uid"]
+            ):
+                raise Blocked("IngressDeleting", "Waiting for the disabled Ingress to finish deletion.")
             config_hash = self._configuration_hash(spec)
             if (
                 spec.release.paused

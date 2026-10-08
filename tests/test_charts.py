@@ -71,6 +71,44 @@ def test_manual_chart_isolates_migration_credentials_and_checks_storage_readines
     assert serving["startupProbe"]["httpGet"]["path"] == "/healthz"
 
 
+def test_manual_gateway_is_disabled_by_default(worker_values, tmp_path):
+    docs = render("pig-trace-analyzer", worker_values, tmp_path)
+    assert not any(doc["kind"] == "Ingress" for doc in docs)
+    assert next(doc for doc in docs if doc["kind"] == "Service")["spec"]["type"] == "ClusterIP"
+
+
+@pytest.mark.parametrize("secret_name", ["pig-tls", None])
+def test_manual_https_gateway_uses_exact_collector_routes(worker_values, tmp_path, secret_name):
+    tls = {"hosts": ["pig.example.com"]}
+    if secret_name:
+        tls["secretName"] = secret_name
+    worker_values["gateway"] = {
+        "enabled": True,
+        "className": "nginx" if secret_name else "alb",
+        "hosts": [{"host": "pig.example.com"}],
+        "tls": [tls],
+    }
+    docs = render("pig-trace-analyzer", worker_values, tmp_path)
+    ingress = next(doc for doc in docs if doc["kind"] == "Ingress")
+    assert ingress["spec"]["tls"] == [tls]
+    paths = ingress["spec"]["rules"][0]["http"]["paths"]
+    assert {path["path"] for path in paths} == {
+        "/healthz",
+        "/v0/host-enrollment/policy",
+        "/v0/host-enrollment/check-ins",
+        "/v0/cloud-enrollment/leases",
+        "/v0/traces/batches",
+    }
+    assert all(path["pathType"] == "Exact" for path in paths)
+
+
+def test_manual_gateway_requires_tls_configuration(worker_values, tmp_path):
+    worker_values["gateway"] = {"enabled": True}
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        render("pig-trace-analyzer", worker_values, tmp_path)
+    assert "gateway.tls is required" in (error.value.stdout or "") + (error.value.stderr or "")
+
+
 @pytest.mark.parametrize(
     "release,override",
     [("acme", None), ("customer-production-us-east-2-pig", None), ("a" * 53, None), ("acme", "x" * 54 + "-suffix")],
@@ -264,6 +302,14 @@ def test_manual_rejects_separate_migration_identity(worker_values: dict[str, obj
 
 def test_supervisor_grants_no_identity_secret_or_rbac_writes(tmp_path):
     docs = render("pig-supervisor", {"image": {"digest": DIGEST}}, tmp_path)
+    ingress_rule = next(
+        rule
+        for doc in docs
+        if doc["kind"] == "Role"
+        for rule in doc["rules"]
+        if "ingresses" in rule.get("resources", [])
+    )
+    assert set(ingress_rule["verbs"]) == {"get", "create", "patch", "delete"}
     for doc in docs:
         if doc["kind"] not in ("Role", "ClusterRole"):
             continue

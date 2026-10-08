@@ -32,7 +32,7 @@ charts rendered with explicit required values. A failed render fails the job. To
 fail their jobs. Review any future scanner exception with a specific reason and
 scope instead of disabling a scanner or ignoring an entire class of findings.
 The two path-scoped exceptions in [.github/trivyignore.yaml](.github/trivyignore.yaml)
-cover the supervisor's required Service/Ingress permissions and Azure storage's
+cover the supervisor's required Service permissions and Azure storage's
 intentional refusal of a trusted-services firewall bypass.
 
 ## Kubernetes integration
@@ -47,20 +47,24 @@ It does not publish an image or require GHCR credentials. The suite checks:
   and reconciles a new generation while preserving the custom resource.
 - The API rejects an invalid custom resource. Status updates preserve the spec,
   reject stale resource versions, and remove obsolete status fields.
-- Secret rotation changes the configuration hash using real resource versions.
+- Helm adopts a previously PIG-owned Ingress without changing its UID or network
+  spec; deleting PIGDeployment afterwards leaves the Ingress in place.
+- Secret rotation changes the configuration hash using real resource versions;
+  ingress annotation changes leave it unchanged.
 - Server-side apply preserves the allocated Service IP, rejects field-manager
   conflicts, and refuses adoption of a resource belonging to another owner.
 - Competing clients respect the namespace Lease, and the chart's ServiceAccount
-  can update only the intended CRD while forbidden identity, Secret, RBAC, and
+  can update only the intended CRD while forbidden identity, Secret, Ingress, RBAC, and
   cross-namespace operations return authorization errors.
 
 The Lease duration is shortened explicitly in handoff tests to avoid a
 five-minute wait. These checks do not exercise analyzer migrations or prove
 cloud identity, database TLS, trace persistence, analysis, or Dashboard delivery.
 The 0.3.0 publication gate requires real AWS installation and canonical acceptance.
-Version 0.3.1 permits explicit AWS-only owner sign-off in place of stored reports.
-Azure and GCP remain experimental. Later versions retain the full three-cloud gate
-described in [RELEASING.md](RELEASING.md).
+Versions 0.3.1, 0.3.3, and 0.3.4 permit explicit AWS-only owner sign-off in place of
+stored reports. This does not establish a live Python-to-Go upgrade or canonical
+analysis acceptance. Azure and GCP remain experimental. Other versions retain the
+full three-cloud gate described in [RELEASING.md](RELEASING.md).
 
 `go test -race ./...` exercises the supervisor, including the recorded Python
 reconciliation cases, API transport, and patch-only leadership protocol.

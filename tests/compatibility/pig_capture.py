@@ -1,6 +1,6 @@
 """Capture the Python supervisor's tested API transcript for Go migration parity.
 
-Run from a checkout of baseline 4be20d3, with this file on PYTHONPATH:
+Run from a checkout of baseline 9d75514 with external-ingress.patch applied, with this file on PYTHONPATH:
   PIG_TRANSCRIPTS=/absolute/output.jsonl uv run pytest -p pig_capture tests/test_supervisor.py
 Each reconciliation is independent and records immutable inputs, API observations,
 and intended writes. The Go replay also restarts the controller for every record.

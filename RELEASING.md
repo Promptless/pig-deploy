@@ -1,10 +1,11 @@
 # Release operations
 
-The source prepares version 0.3.2 with storage hardening. The stable catalog selects
-the published 0.3.1 release. Local tests are not installation acceptance. Versions 0.3.0
+Version 0.3.3 includes the analyzer's NUL ingestion repair. The [stable catalog](catalog/stable.json)
+selects published releases. Local tests are not installation acceptance. Versions 0.3.0
 and 0.3.1 are AWS-only releases. Report-backed acceptance covers a real AWS clean
 installation and canonical pipeline, plus the unattended 0.3.0 to 0.3.1 patch update
-for 0.3.1. Version 0.3.1 may instead use the explicit owner sign-off described below.
+for 0.3.1. Versions 0.3.1 and 0.3.3 may use the explicit AWS-only owner sign-off
+described below. The 0.3.3 approval leaves live analysis acceptance pending.
 Azure and GCP support remains experimental; these releases do not
 establish cloud validation for their native adapters or deployment modules.
 
@@ -67,8 +68,9 @@ check can pass. No customer secret belongs in this repository or its evidence.
    rules. Additional lifecycle checks may be recorded when actually tested.
    A nonempty `rollbackTo` requires a `recovery` report for every required cloud.
 
-   The AWS-only exception applies only to 0.3.0 and 0.3.1. Later versions retain
-   the EKS, AKS, and GKE gate with all nine checks until a reviewed policy change:
+   Report-backed AWS-only acceptance applies only to 0.3.0 and 0.3.1. Other versions
+   require EKS, AKS, and GKE reports with all nine checks unless they use an
+   explicitly permitted owner sign-off:
 
    ```text
    install canonicalAcceptance minorUpdate majorUpdate pausePin
@@ -81,15 +83,17 @@ check can pass. No customer secret belongs in this repository or its evidence.
    A reviewer checks report contents. The workflow validates structure, binding,
    and freshness; it does not independently execute or audit the evidence URLs.
 
-   **Owner sign-off for 0.3.1:** the release owner may explicitly approve AWS-only
+   **Owner sign-off for 0.3.1 and 0.3.3:** the release owner may explicitly approve AWS-only
    publication and stable promotion in place of stored test reports. Retain all
    exact source, image, and requirements identities, omit the cloud reports, and
    supply `ownerSignOff` with `approvedBy`, timezone-aware `approvedAt`,
    `scope: "aws-only"`, and a `statement` explaining the approval. This is an
    approval record, not a claim that report-backed testing was verified. It must
    not contain `testedAt`, invented report URLs, or advertised rollback paths.
-   The exception applies only to 0.3.1; image execution, capabilities, artifact
-   integrity, anonymous access, and catalog review remain mandatory.
+   The exception applies only to 0.3.1 and 0.3.3; image execution, capabilities,
+   artifact integrity, anonymous access, and catalog review remain mandatory.
+   The 0.3.3 record must document pending canonical analysis acceptance and the
+   unverified cloud lifecycle checks. It does not certify Azure or GCP support.
 5. Compute `requirementsDigest` as SHA-256 of the requirements model's canonical
    JSON: parse `releases/requirements/VERSION.json` with `Requirements`, dump with
    aliases, then serialize with sorted keys and compact separators. This internal
@@ -99,7 +103,7 @@ check can pass. No customer secret belongs in this repository or its evidence.
 
 ### Schema-4 candidate
 
-The 0.3.2 requirements accept starting schema revisions 0–3 and target revision 4.
+The 0.3.3 requirements accept starting schema revisions 0–3 and target revision 4.
 The worker also accepts the target revision for retries and configuration rotation.
 The image must advertise `alembic-migrations-v1` and `storage-readiness-v1`.
 Worker CI runs installation and recovery tests on PostgreSQL 15–18 before customer GHCR image

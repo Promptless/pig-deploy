@@ -7,7 +7,7 @@ The [stable catalog](catalog/stable.json)
 selects published releases. Local tests are not installation acceptance. Versions 0.3.0
 and 0.3.1 are AWS-only releases. Report-backed acceptance covers a real AWS clean
 installation and canonical pipeline, plus the unattended 0.3.0 to 0.3.1 patch update
-for 0.3.1. Versions 0.3.1, 0.3.3, and 0.3.4 may use the explicit AWS-only owner sign-off
+for 0.3.1. Versions 0.3.1, 0.3.3, 0.3.4, and 0.3.5 may use the explicit AWS-only owner sign-off
 described below. The 0.3.3 approval leaves live analysis acceptance pending.
 Azure and GCP support remains experimental; these releases do not
 establish cloud validation for their native adapters or deployment modules.
@@ -41,7 +41,7 @@ check can pass. No customer secret belongs in this repository or its evidence.
 
 1. Merge reviewed public source and the compatible private analyzer implementation.
    The analyzer's deployment-capabilities command must report controller protocol
-   1, schema revision 4, native `s3`/`azureBlob`/`gcs`, and the `preflight`,
+   1, schema revision 5, native `s3`/`azureBlob`/`gcs`, and the `preflight`,
    `supervised-migrate`, `verify`, and `acceptance` commands. Its capabilities must
    include `native-storage-v1`, `migration-ledger-v1`, `installation-identity-v1`,
    `alembic-migrations-v1`, and `storage-readiness-v1`.
@@ -86,14 +86,14 @@ check can pass. No customer secret belongs in this repository or its evidence.
    A reviewer checks report contents. The workflow validates structure, binding,
    and freshness; it does not independently execute or audit the evidence URLs.
 
-   **Owner sign-off for 0.3.1, 0.3.3, and 0.3.4:** the release owner may explicitly approve AWS-only
+   **Owner sign-off for 0.3.1, 0.3.3, 0.3.4, and 0.3.5:** the release owner may explicitly approve AWS-only
    publication and stable promotion in place of stored test reports. Retain all
    exact source, image, and requirements identities, omit the cloud reports, and
    supply `ownerSignOff` with `approvedBy`, timezone-aware `approvedAt`,
    `scope: "aws-only"`, and a `statement` explaining the approval. This is an
    approval record, not a claim that report-backed testing was verified. It must
    not contain `testedAt`, invented report URLs, or advertised rollback paths.
-   The exception applies only to 0.3.1, 0.3.3, and 0.3.4; image execution, capabilities,
+   The exception applies only to 0.3.1, 0.3.3, 0.3.4, and 0.3.5; image execution, capabilities,
    artifact integrity, anonymous access, and catalog review remain mandatory.
    The 0.3.3 record must document pending canonical analysis acceptance and the
    unverified cloud lifecycle checks. It does not certify Azure or GCP support.
@@ -101,6 +101,9 @@ check can pass. No customer secret belongs in this repository or its evidence.
    self-update, recovery, and canonical analysis checks. Allowing this exception
    does not itself approve candidate artifacts. Record a fresh owner decision for
    the exact source and image digests after candidate verification.
+   The 0.3.5 record binds the owner's AWS-only release authorization to verified
+   candidates and lists the unverified installation, upgrade, recovery, and
+   canonical analysis checks.
 5. Compute `requirementsDigest` as SHA-256 of the requirements model's canonical
    JSON: parse `releases/requirements/VERSION.json` with `Requirements`, dump with
    aliases, then serialize with sorted keys and compact separators. This internal
@@ -119,7 +122,7 @@ publication. Keep the supervisor's stop, migrate, start sequence.
 Alembic adopts known predecessors after checking their history and layout.
 Conflicting locations, unknown checksums, and incomplete schemas abort the
 transaction. `destructiveMigration: false` means the migration preserves data;
-recovery still requires a schema-4-compatible image or forward repair. Include a
+recovery still requires a schema-5-compatible image or forward repair. Include a
 `rollbackTo` entry only for a tested path between releases with the same schema.
 
 Exercise [storage recovery](STORAGE.md#recover-from-a-backup) with the target

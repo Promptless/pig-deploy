@@ -3,7 +3,7 @@
 ## Release support
 
 The 0.3.0 release requires a verified clean installation on AWS/EKS and canonical
-pipeline acceptance through the Dashboard. Versions 0.3.1, 0.3.3, and 0.3.4 permit
+pipeline acceptance through the Dashboard. Versions 0.3.1, 0.3.3, 0.3.4, and 0.3.5 permit
 explicit AWS-only owner sign-off in place of stored test reports. Each release
 requires its own approval bound to exact artifacts. Azure/AKS and GCP/GKE are
 experimental.

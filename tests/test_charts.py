@@ -15,7 +15,7 @@ def worker_values() -> dict[str, object]:
     """Supply the required manual-chart settings without changing identity defaults."""
     return {
         "image": {"digest": DIGEST},
-        "instructionHub": {
+        "pig": {
             "configHash": "test",
             "traceObjectS3Bucket": "acme-traces",
         },
@@ -58,14 +58,12 @@ def test_manual_chart_isolates_migration_credentials_and_checks_storage_readines
     migration = job["spec"]["template"]["spec"]["containers"][0]
     serving_env = {entry["name"]: entry for entry in serving["env"]}
     migration_env = {entry["name"]: entry for entry in migration["env"]}
-    assert "INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN" not in serving_env
-    assert migration_env["INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN"]["valueFrom"]["secretKeyRef"] == {
+    assert "PIG_MIGRATION_POSTGRES_DSN" not in serving_env
+    assert migration_env["PIG_MIGRATION_POSTGRES_DSN"]["valueFrom"]["secretKeyRef"] == {
         "name": "pig-credentials",
         "key": "migration-dsn",
     }
-    assert (
-        serving_env["INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN"] == migration_env["INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN"]
-    )
+    assert serving_env["PIG_CUSTOMER_POSTGRES_DSN"] == migration_env["PIG_CUSTOMER_POSTGRES_DSN"]
     assert serving["readinessProbe"]["httpGet"]["path"] == "/readyz"
     assert serving["livenessProbe"]["httpGet"]["path"] == "/healthz"
     assert serving["startupProbe"]["httpGet"]["path"] == "/healthz"
@@ -127,16 +125,16 @@ def test_migration_job_name_reserves_room_for_suffix(worker_values, tmp_path, re
 @pytest.mark.parametrize(
     "backend,storage,expected",
     [
-        ("postgres_s3", {"traceObjectS3Bucket": "acme-traces"}, "INSTRUCTION_HUB_TRACE_OBJECT_S3_BUCKET"),
+        ("postgres_s3", {"traceObjectS3Bucket": "acme-traces"}, "PIG_TRACE_OBJECT_S3_BUCKET"),
         (
             "postgres_azure_blob",
             {
                 "traceObjectAzureAccountUrl": "https://acmetrace.blob.core.windows.net",
                 "traceObjectAzureContainer": "traces",
             },
-            "INSTRUCTION_HUB_TRACE_OBJECT_AZURE_CONTAINER",
+            "PIG_TRACE_OBJECT_AZURE_CONTAINER",
         ),
-        ("postgres_gcs", {"traceObjectGcsBucket": "acme-traces"}, "INSTRUCTION_HUB_TRACE_OBJECT_GCS_BUCKET"),
+        ("postgres_gcs", {"traceObjectGcsBucket": "acme-traces"}, "PIG_TRACE_OBJECT_GCS_BUCKET"),
     ],
 )
 def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_path):
@@ -147,7 +145,7 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
             "serviceAccount": {"create": False, "name": "pig-analyzer"},
             "podLabels": {"azure.workload.identity/use": "true"},
             "nodeSelector": {"iam.gke.io/gke-metadata-server-enabled": "true"},
-            "instructionHub": {
+            "pig": {
                 "configHash": "test",
                 "storageBackend": backend,
                 "postgresCaConfigMapName": "postgres-ca",
@@ -168,10 +166,10 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
         container = template["spec"]["containers"][0]
         env = {e["name"]: e for e in container["env"]}
         assert expected in env
-        assert env["INSTRUCTION_HUB_RUNTIME_BASE_URL"]["value"] == "https://api.gopromptless.ai"
-        assert "INSTRUCTION_HUB_DEPLOYMENT_INSTANCE_ID" not in env
-        assert "INSTRUCTION_HUB_DEPLOYMENT_NAME" not in env
-        assert env["INSTRUCTION_HUB_INSTALL_TOKEN"]["valueFrom"]["secretKeyRef"]["name"] == "pig-credentials"
+        assert env["PIG_RUNTIME_BASE_URL"]["value"] == "https://api.gopromptless.ai"
+        assert "PIG_DEPLOYMENT_INSTANCE_ID" not in env
+        assert "PIG_DEPLOYMENT_NAME" not in env
+        assert env["PIG_INSTALL_TOKEN"]["valueFrom"]["secretKeyRef"]["name"] == "pig-credentials"
         assert env["PGSSLROOTCERT"]["value"] == "/etc/pig/postgres-ca/ca.pem"
         assert container["image"].endswith("@" + DIGEST)
         assert any(v["name"] == "postgres-ca" for v in template["spec"]["volumes"])
@@ -182,13 +180,13 @@ def test_manual_native_identity_ca_and_traffic(backend, storage, expected, tmp_p
 
 
 def test_manual_runtime_override_reaches_analyzer_and_migration(worker_values, tmp_path):
-    worker_values["instructionHub"]["runtimeBaseUrl"] = "https://staging.example.com"
+    worker_values["pig"]["runtimeBaseUrl"] = "https://staging.example.com"
     docs = render("pig-trace-analyzer", worker_values, tmp_path)
     for resource in docs:
         if resource["kind"] not in {"Deployment", "Job"}:
             continue
         env = {entry["name"]: entry for entry in resource["spec"]["template"]["spec"]["containers"][0]["env"]}
-        assert env["INSTRUCTION_HUB_RUNTIME_BASE_URL"]["value"] == "https://staging.example.com"
+        assert env["PIG_RUNTIME_BASE_URL"]["value"] == "https://staging.example.com"
 
 
 @pytest.mark.parametrize("activation_at", ["", "2026-09-21T00:00:00Z"])
@@ -209,13 +207,13 @@ def test_manual_model_access_without_repository_configuration(
         "pig-trace-analyzer",
         {
             "image": {"digest": DIGEST},
-            "instructionHub": {
+            "pig": {
                 "configHash": "test",
                 "traceObjectS3Bucket": "acme-traces",
                 "analysis": {
                     "activationAt": activation_at,
                     "catalogEnabled": not activation_at,
-                    "mirrorRoot": "/var/lib/instruction-hub/custom-mirrors",
+                    "mirrorRoot": "/var/lib/pig/custom-mirrors",
                     "modelApi": model,
                 },
             },
@@ -232,23 +230,23 @@ def test_manual_model_access_without_repository_configuration(
     pod = deployment["spec"]["template"]["spec"]
     container = pod["containers"][0]
     env = {entry["name"]: entry for entry in container["env"]}
-    assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_NAME"]["value"] == "test-model"
-    assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_AUTHENTICATION"]["value"] == authentication
-    assert env["INSTRUCTION_HUB_ANALYSIS_MIRROR_ROOT"]["value"] == "/var/lib/instruction-hub/custom-mirrors"
-    assert ("INSTRUCTION_HUB_ANALYSIS_ACTIVATION_AT" in env) is bool(activation_at)
-    assert not any(name.startswith("INSTRUCTION_HUB_ANALYSIS_REPOSITORY_") for name in env)
-    assert {"name": "analysis-mirrors", "mountPath": "/var/lib/instruction-hub"} in container["volumeMounts"]
+    assert env["PIG_ANALYSIS_MODEL_NAME"]["value"] == "test-model"
+    assert env["PIG_ANALYSIS_MODEL_AUTHENTICATION"]["value"] == authentication
+    assert env["PIG_ANALYSIS_MIRROR_ROOT"]["value"] == "/var/lib/pig/custom-mirrors"
+    assert ("PIG_ANALYSIS_ACTIVATION_AT" in env) is bool(activation_at)
+    assert not any(name.startswith("PIG_ANALYSIS_REPOSITORY_") for name in env)
+    assert {"name": "analysis-mirrors", "mountPath": "/var/lib/pig"} in container["volumeMounts"]
     assert {"name": "analysis-mirrors", "emptyDir": {}} in pod["volumes"]
     secret = next(doc for doc in docs if doc["kind"] == "Secret")
     expected_keys = {"install-token", "customer-postgres-dsn"}
     if authentication == "api_key":
         expected_keys.add("analysis-model-api-key")
-        assert env["INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY"]["valueFrom"]["secretKeyRef"] == {
+        assert env["PIG_ANALYSIS_MODEL_API_KEY"]["valueFrom"]["secretKeyRef"] == {
             "name": secret["metadata"]["name"],
             "key": "analysis-model-api-key",
         }
     else:
-        assert "INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY" not in env
+        assert "PIG_ANALYSIS_MODEL_API_KEY" not in env
     assert set(secret["stringData"]) == expected_keys
 
 

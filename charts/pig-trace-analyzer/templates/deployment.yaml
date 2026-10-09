@@ -62,51 +62,51 @@ spec:
             - name: http
               containerPort: {{ .Values.service.workerPort }}
           env:
-            - name: INSTRUCTION_HUB_RUNTIME_BASE_URL
-              value: {{ required "instructionHub.runtimeBaseUrl is required" .Values.instructionHub.runtimeBaseUrl | quote }}
-            - name: INSTRUCTION_HUB_PORT
+            - name: PIG_RUNTIME_BASE_URL
+              value: {{ required "pig.runtimeBaseUrl is required" .Values.pig.runtimeBaseUrl | quote }}
+            - name: PIG_PORT
               value: {{ .Values.service.workerPort | int | quote }}
-            - name: INSTRUCTION_HUB_CHART_VERSION
+            - name: PIG_CHART_VERSION
               value: {{ .Chart.Version | quote }}
-            - name: INSTRUCTION_HUB_CONFIG_HASH
-              value: {{ required "instructionHub.configHash is required" .Values.instructionHub.configHash | quote }}
+            - name: PIG_CONFIG_HASH
+              value: {{ required "pig.configHash is required" .Values.pig.configHash | quote }}
             {{- include "pig-trace-analyzer.storageEnv" . | nindent 12 }}
-            - name: INSTRUCTION_HUB_MAX_TRACE_BATCH_BYTES
-              value: {{ .Values.instructionHub.maxTraceBatchBytes | int | quote }}
-            - name: INSTRUCTION_HUB_LOG_LEVEL
-              value: {{ .Values.instructionHub.logLevel | default "INFO" | quote }}
+            - name: PIG_MAX_TRACE_BATCH_BYTES
+              value: {{ .Values.pig.maxTraceBatchBytes | int | quote }}
+            - name: PIG_LOG_LEVEL
+              value: {{ .Values.pig.logLevel | default "INFO" | quote }}
             {{- include "pig-trace-analyzer.observabilityEnv" . | nindent 12 }}
-            - name: INSTRUCTION_HUB_ANALYSIS_QUIET_WINDOW_HOURS
-              value: {{ .Values.instructionHub.analysis.quietWindowHours | quote }}
-            {{- if or .Values.instructionHub.analysis.activationAt .Values.instructionHub.analysis.catalogEnabled }}
-            {{- if .Values.instructionHub.analysis.activationAt }}
-            - name: INSTRUCTION_HUB_ANALYSIS_ACTIVATION_AT
-              value: {{ .Values.instructionHub.analysis.activationAt | quote }}
+            - name: PIG_ANALYSIS_QUIET_WINDOW_HOURS
+              value: {{ .Values.pig.analysis.quietWindowHours | quote }}
+            {{- if or .Values.pig.analysis.activationAt .Values.pig.analysis.catalogEnabled }}
+            {{- if .Values.pig.analysis.activationAt }}
+            - name: PIG_ANALYSIS_ACTIVATION_AT
+              value: {{ .Values.pig.analysis.activationAt | quote }}
             {{- end }}
-            - name: INSTRUCTION_HUB_ANALYSIS_MODEL_PROVIDER
-              value: {{ required "instructionHub.analysis.modelApi.provider is required when trace analysis or catalog indexing is enabled" .Values.instructionHub.analysis.modelApi.provider | quote }}
-            - name: INSTRUCTION_HUB_ANALYSIS_MODEL_AUTHENTICATION
-              value: {{ required "instructionHub.analysis.modelApi.authentication is required when trace analysis or catalog indexing is enabled" .Values.instructionHub.analysis.modelApi.authentication | quote }}
-            - name: INSTRUCTION_HUB_ANALYSIS_MODEL_BASE_URL
-              value: {{ required "instructionHub.analysis.modelApi.baseUrl is required when trace analysis or catalog indexing is enabled" .Values.instructionHub.analysis.modelApi.baseUrl | quote }}
-            {{- if eq .Values.instructionHub.analysis.modelApi.authentication "api_key" }}
-            - name: INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY
+            - name: PIG_ANALYSIS_MODEL_PROVIDER
+              value: {{ required "pig.analysis.modelApi.provider is required when trace analysis or catalog indexing is enabled" .Values.pig.analysis.modelApi.provider | quote }}
+            - name: PIG_ANALYSIS_MODEL_AUTHENTICATION
+              value: {{ required "pig.analysis.modelApi.authentication is required when trace analysis or catalog indexing is enabled" .Values.pig.analysis.modelApi.authentication | quote }}
+            - name: PIG_ANALYSIS_MODEL_BASE_URL
+              value: {{ required "pig.analysis.modelApi.baseUrl is required when trace analysis or catalog indexing is enabled" .Values.pig.analysis.modelApi.baseUrl | quote }}
+            {{- if eq .Values.pig.analysis.modelApi.authentication "api_key" }}
+            - name: PIG_ANALYSIS_MODEL_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "pig-trace-analyzer.secretName" . }}
                   key: {{ .Values.secrets.analysisModelApiKeyKey }}
             {{- end }}
-            - name: INSTRUCTION_HUB_ANALYSIS_MODEL_NAME
-              value: {{ required "instructionHub.analysis.modelApi.model is required when trace analysis or catalog indexing is enabled" .Values.instructionHub.analysis.modelApi.model | quote }}
-            - name: INSTRUCTION_HUB_ANALYSIS_MIRROR_ROOT
-              value: {{ .Values.instructionHub.analysis.mirrorRoot | quote }}
+            - name: PIG_ANALYSIS_MODEL_NAME
+              value: {{ required "pig.analysis.modelApi.model is required when trace analysis or catalog indexing is enabled" .Values.pig.analysis.modelApi.model | quote }}
+            - name: PIG_ANALYSIS_MIRROR_ROOT
+              value: {{ .Values.pig.analysis.mirrorRoot | quote }}
             {{- end }}
-            - name: INSTRUCTION_HUB_INSTALL_TOKEN
+            - name: PIG_INSTALL_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "pig-trace-analyzer.secretName" . }}
                   key: {{ .Values.secrets.installTokenKey }}
-            - name: INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN
+            - name: PIG_CUSTOMER_POSTGRES_DSN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "pig-trace-analyzer.secretName" . }}
@@ -131,15 +131,15 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- include "pig-trace-analyzer.caMount" . | nindent 12 }}
-          {{- if or .Values.instructionHub.analysis.activationAt .Values.instructionHub.analysis.catalogEnabled }}
+          {{- if or .Values.pig.analysis.activationAt .Values.pig.analysis.catalogEnabled }}
             - name: analysis-mirrors
-              mountPath: /var/lib/instruction-hub
+              mountPath: /var/lib/pig
           {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
         {{- include "pig-trace-analyzer.caVolume" . | nindent 8 }}
-      {{- if or .Values.instructionHub.analysis.activationAt .Values.instructionHub.analysis.catalogEnabled }}
+      {{- if or .Values.pig.analysis.activationAt .Values.pig.analysis.catalogEnabled }}
         - name: analysis-mirrors
           emptyDir: {}
       {{- end }}

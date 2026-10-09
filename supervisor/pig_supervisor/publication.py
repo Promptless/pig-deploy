@@ -28,7 +28,7 @@ CHARTS = ("pig-supervisor", "pig-trace-analyzer")
 INITIAL_RELEASE = "0.3.0"
 INSTALL_CHECKS = frozenset({"install", "canonicalAcceptance"})
 AWS_PATCH_RELEASE = "0.3.1"
-OWNER_SIGN_OFF_RELEASES = frozenset({"0.3.1", "0.3.3", "0.3.4"})
+OWNER_SIGN_OFF_RELEASES = frozenset({"0.3.1", "0.3.3", "0.3.4", "0.3.5"})
 PATCH_CHECKS = INSTALL_CHECKS | {"patchUpdate"}
 CHECKS = frozenset(
     {
@@ -92,7 +92,7 @@ class AcceptanceEvidence(Contract):
         aws_patch = self.version == AWS_PATCH_RELEASE
         if self.owner_sign_off is not None:
             if self.version not in OWNER_SIGN_OFF_RELEASES:
-                raise ValueError("owner sign-off is permitted only for AWS-only 0.3.1, 0.3.3, and 0.3.4")
+                raise ValueError("owner sign-off is permitted only for AWS-only 0.3.1, 0.3.3, 0.3.4, and 0.3.5")
             if any(cloud is not None for cloud in (self.eks, self.aks, self.gke)):
                 raise ValueError("owner sign-off must not be presented as cloud test evidence")
             if self.rollback_to:

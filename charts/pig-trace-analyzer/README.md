@@ -4,17 +4,17 @@ Create a named analyzer installation in Promptless Settings and deliver its
 credential through `secrets.existingSecretName` and `secrets.installTokenKey`.
 The analyzer resolves its installation identity from this credential. The migration
 Job uses database credentials and needs no hosted connection.
-`instructionHub.runtimeBaseUrl` defaults to
+`pig.runtimeBaseUrl` defaults to
 `https://api.gopromptless.ai`; override it only for another Promptless environment.
 Credential rotation immediately revokes the previous credential. Update the
 external Secret and restart the analyzer with the replacement credential.
 
 Select instruction repositories in Promptless Settings. Set
-`instructionHub.analysis.activationAt` to enable trace analysis from that time.
+`pig.analysis.activationAt` to enable trace analysis from that time.
 To enable instruction catalog indexing without trace analysis, set
-`instructionHub.analysis.catalogEnabled: true` and leave `activationAt` empty.
-Both modes use `instructionHub.analysis.modelApi` and
-`instructionHub.analysis.mirrorRoot`.
+`pig.analysis.catalogEnabled: true` and leave `activationAt` empty.
+Both modes use `pig.analysis.modelApi` and
+`pig.analysis.mirrorRoot`.
 
 Create the analyzer ServiceAccount before installing the chart. Apply the cloud
 identity annotations from Terraform's `deployment_configuration` output to that
@@ -35,8 +35,8 @@ key in the existing Secret. Only the migration Job receives that credential;
 `secrets.customerPostgresDsnKey` supplies application access. Both DSNs require
 `sslmode=verify-full`. To supply a database CA bundle through Kubernetes, create
 its ConfigMap in the analyzer namespace before installing the chart.
-Set `instructionHub.postgresCaConfigMapName` and
-`instructionHub.postgresCaConfigMapKey` to mount its bundle in both the analyzer
+Set `pig.postgresCaConfigMapName` and
+`pig.postgresCaConfigMapKey` to mount its bundle in both the analyzer
 and migration Job as `PGSSLROOTCERT`. For RDS, use the
 [AWS regional CA bundle](../../examples/aws/README.md). The migration hook needs
 the ConfigMap before Helm installs ordinary chart resources.

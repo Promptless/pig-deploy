@@ -88,36 +88,36 @@ tags.datadoghq.com/version: {{ .Chart.AppVersion | quote }}
 {{- end -}}
 
 {{- define "pig-trace-analyzer.storageEnv" -}}
-- name: INSTRUCTION_HUB_STORAGE_BACKEND
-  value: {{ .Values.instructionHub.storageBackend | quote }}
-{{- if eq .Values.instructionHub.storageBackend "postgres_s3" }}
-- name: INSTRUCTION_HUB_TRACE_OBJECT_S3_BUCKET
-  value: {{ required "instructionHub.traceObjectS3Bucket is required" .Values.instructionHub.traceObjectS3Bucket | quote }}
-- name: INSTRUCTION_HUB_TRACE_OBJECT_S3_PREFIX
-  value: {{ .Values.instructionHub.traceObjectS3Prefix | quote }}
-{{- else if eq .Values.instructionHub.storageBackend "postgres_azure_blob" }}
-- name: INSTRUCTION_HUB_TRACE_OBJECT_AZURE_ACCOUNT_URL
-  value: {{ required "instructionHub.traceObjectAzureAccountUrl is required" .Values.instructionHub.traceObjectAzureAccountUrl | quote }}
-- name: INSTRUCTION_HUB_TRACE_OBJECT_AZURE_CONTAINER
-  value: {{ required "instructionHub.traceObjectAzureContainer is required" .Values.instructionHub.traceObjectAzureContainer | quote }}
-- name: INSTRUCTION_HUB_TRACE_OBJECT_PREFIX
-  value: {{ .Values.instructionHub.traceObjectPrefix | quote }}
-{{- else if eq .Values.instructionHub.storageBackend "postgres_gcs" }}
-- name: INSTRUCTION_HUB_TRACE_OBJECT_GCS_BUCKET
-  value: {{ required "instructionHub.traceObjectGcsBucket is required" .Values.instructionHub.traceObjectGcsBucket | quote }}
-- name: INSTRUCTION_HUB_TRACE_OBJECT_PREFIX
-  value: {{ .Values.instructionHub.traceObjectPrefix | quote }}
+- name: PIG_STORAGE_BACKEND
+  value: {{ .Values.pig.storageBackend | quote }}
+{{- if eq .Values.pig.storageBackend "postgres_s3" }}
+- name: PIG_TRACE_OBJECT_S3_BUCKET
+  value: {{ required "pig.traceObjectS3Bucket is required" .Values.pig.traceObjectS3Bucket | quote }}
+- name: PIG_TRACE_OBJECT_S3_PREFIX
+  value: {{ .Values.pig.traceObjectS3Prefix | quote }}
+{{- else if eq .Values.pig.storageBackend "postgres_azure_blob" }}
+- name: PIG_TRACE_OBJECT_AZURE_ACCOUNT_URL
+  value: {{ required "pig.traceObjectAzureAccountUrl is required" .Values.pig.traceObjectAzureAccountUrl | quote }}
+- name: PIG_TRACE_OBJECT_AZURE_CONTAINER
+  value: {{ required "pig.traceObjectAzureContainer is required" .Values.pig.traceObjectAzureContainer | quote }}
+- name: PIG_TRACE_OBJECT_PREFIX
+  value: {{ .Values.pig.traceObjectPrefix | quote }}
+{{- else if eq .Values.pig.storageBackend "postgres_gcs" }}
+- name: PIG_TRACE_OBJECT_GCS_BUCKET
+  value: {{ required "pig.traceObjectGcsBucket is required" .Values.pig.traceObjectGcsBucket | quote }}
+- name: PIG_TRACE_OBJECT_PREFIX
+  value: {{ .Values.pig.traceObjectPrefix | quote }}
 {{- else }}
 {{- fail "storageBackend must be postgres_s3, postgres_azure_blob, or postgres_gcs" }}
 {{- end }}
-{{- if .Values.instructionHub.postgresCaConfigMapName }}
+{{- if .Values.pig.postgresCaConfigMapName }}
 - name: PGSSLROOTCERT
   value: /etc/pig/postgres-ca/ca.pem
 {{- end }}
 {{- end -}}
 
 {{- define "pig-trace-analyzer.caMount" -}}
-{{- if .Values.instructionHub.postgresCaConfigMapName }}
+{{- if .Values.pig.postgresCaConfigMapName }}
 - name: postgres-ca
   mountPath: /etc/pig/postgres-ca
   readOnly: true
@@ -125,12 +125,12 @@ tags.datadoghq.com/version: {{ .Chart.AppVersion | quote }}
 {{- end -}}
 
 {{- define "pig-trace-analyzer.caVolume" -}}
-{{- if .Values.instructionHub.postgresCaConfigMapName }}
+{{- if .Values.pig.postgresCaConfigMapName }}
 - name: postgres-ca
   configMap:
-    name: {{ .Values.instructionHub.postgresCaConfigMapName | quote }}
+    name: {{ .Values.pig.postgresCaConfigMapName | quote }}
     items:
-      - key: {{ .Values.instructionHub.postgresCaConfigMapKey | quote }}
+      - key: {{ .Values.pig.postgresCaConfigMapKey | quote }}
         path: ca.pem
 {{- end }}
 {{- end -}}

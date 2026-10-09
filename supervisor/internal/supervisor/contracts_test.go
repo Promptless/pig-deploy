@@ -64,15 +64,15 @@ func TestWorkloadCredentialAndSchedulingBoundaries(t *testing.T) {
 				for _, v := range items(container["env"]) {
 					entry := object(v)
 					env[str(entry, "name")] = entry
-					if strings.HasPrefix(str(entry, "name"), "INSTRUCTION_HUB_ANALYSIS_REPOSITORY_") {
+					if strings.HasPrefix(str(entry, "name"), "PIG_ANALYSIS_REPOSITORY_") {
 						t.Fatal("repository credential leaked into workload")
 					}
 				}
-				_, migration := env["INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN"]
+				_, migration := env["PIG_MIGRATION_POSTGRES_DSN"]
 				if migration != (phase == "preflight" || phase == "migration") {
 					t.Fatalf("migration credentials in %s", phase)
 				}
-				if str(env["INSTRUCTION_HUB_RUNTIME_BASE_URL"], "value") != "https://staging.example.com" || str(child(env["INSTRUCTION_HUB_INSTALL_TOKEN"], "valueFrom", "secretKeyRef"), "key") != "install-token" {
+				if str(env["PIG_RUNTIME_BASE_URL"], "value") != "https://staging.example.com" || str(child(env["PIG_INSTALL_TOKEN"], "valueFrom", "secretKeyRef"), "key") != "install-token" {
 					t.Fatal("hosted identity missing")
 				}
 				if !reflect.DeepEqual(child(template, "spec", "nodeSelector"), s["nodeSelector"]) {

@@ -20,6 +20,9 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: {{ .Release.Name }}
+      annotations:
+        # Datadog agents with containerCollectAll disabled tail only annotated containers.
+        ad.datadoghq.com/supervisor.logs: '[{"source":"go","service":"pig-supervisor"}]'
     spec:
       serviceAccountName: {{ .Release.Name }}
       securityContext:

@@ -1,5 +1,6 @@
 """Render actual charts and verify identities, TLS mounts, traffic and RBAC boundaries."""
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -332,6 +333,15 @@ def supervisor_values():
             "ingressClassName": "nginx",
         },
     }
+
+
+def test_supervisor_pod_opts_into_datadog_log_collection(supervisor_values, tmp_path):
+    """Datadog agents with containerCollectAll disabled tail only annotated containers."""
+    controller = next(d for d in render("pig-supervisor", supervisor_values, tmp_path) if d["kind"] == "Deployment")
+    template = controller["spec"]["template"]
+    container = template["spec"]["containers"][0]["name"]
+    annotation = template["metadata"]["annotations"][f"ad.datadoghq.com/{container}.logs"]
+    assert json.loads(annotation) == [{"source": "go", "service": "pig-supervisor"}]
 
 
 @pytest.mark.parametrize("secret_name", ["pig-tls", ""])

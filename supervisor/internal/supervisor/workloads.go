@@ -64,7 +64,11 @@ func podTemplate(s DeploymentSpec, r Release, hash, name string) Obj {
 		readiness = "/readyz"
 	}
 	return Obj{
-		"metadata": Obj{"labels": labels, "annotations": Obj{"governance.promptless.ai/config-hash": hash}},
+		"metadata": Obj{"labels": labels, "annotations": Obj{
+			"governance.promptless.ai/config-hash": hash,
+			// Datadog agents with containerCollectAll disabled tail only annotated containers.
+			"ad.datadoghq.com/analyzer.logs": `[{"source":"python","service":"pig-analyzer"}]`,
+		}},
 		"spec": Obj{
 			"serviceAccountName": s.ServiceAccountName, "nodeSelector": asObj(s.NodeSelector), "automountServiceAccountToken": true,
 			"securityContext":               Obj{"runAsNonRoot": true, "runAsUser": 10001, "runAsGroup": 10001, "fsGroup": 10001, "seccompProfile": Obj{"type": "RuntimeDefault"}},

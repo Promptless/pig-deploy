@@ -10,7 +10,9 @@ rollback, acceptance, and supervisor self-update.
 
 The replay supplies the recorded transition UUID. It normalizes equivalent
 timestamp representations, JSON formatting inside `PIG_REQUIREMENTS`, and the
-safe validation-error message. All other resource fields and operations must
+safe validation-error message. It also adds the analyzer's
+`ad.datadoghq.com/analyzer.logs` pod annotation, which the baseline predates, to
+recorded Deployment and Job applies. All other resource fields and operations must
 match. This proves parity with the recorded cases; it does not replace the Go
 client, leadership, admission, or live analyzer acceptance tests.
 

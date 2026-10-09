@@ -39,12 +39,12 @@ func podTemplate(s DeploymentSpec, r Release, hash, name string) Obj {
 	}
 	env := []any{}
 	for _, v := range values {
-		env = append(env, envValue("INSTRUCTION_HUB_"+v[0], v[1]))
+		env = append(env, envValue("PIG_"+v[0], v[1]))
 	}
 	env = append(env, extra...)
-	env = append(env, envSecret("INSTRUCTION_HUB_INSTALL_TOKEN", s.Hosted.InstallTokenSecretRef), envSecret("INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN", s.Storage.Postgres.DSNSecretRef))
+	env = append(env, envSecret("PIG_INSTALL_TOKEN", s.Hosted.InstallTokenSecretRef), envSecret("PIG_CUSTOMER_POSTGRES_DSN", s.Storage.Postgres.DSNSecretRef))
 	if m.APIKeySecretRef != nil {
-		env = append(env, envSecret("INSTRUCTION_HUB_ANALYSIS_MODEL_API_KEY", *m.APIKeySecretRef))
+		env = append(env, envSecret("PIG_ANALYSIS_MODEL_API_KEY", *m.APIKeySecretRef))
 	}
 	mounts := []any{Obj{"name": "tmp", "mountPath": "/tmp"}}
 	volumes := []any{Obj{"name": "tmp", "emptyDir": Obj{}}}
@@ -114,7 +114,7 @@ func JobResource(d Obj, s DeploymentSpec, r Release, digest, hash, phase string,
 	container["args"] = []any{command}
 	env := items(container["env"])
 	if (phase == "preflight" || phase == "migration") && s.Storage.Postgres.MigrationDSNSecretRef != nil {
-		env = append(env, envSecret("INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN", *s.Storage.Postgres.MigrationDSNSecretRef))
+		env = append(env, envSecret("PIG_MIGRATION_POSTGRES_DSN", *s.Storage.Postgres.MigrationDSNSecretRef))
 	}
 	requirements, _ := json.Marshal(r.Requirements)
 	container["env"] = append(env, envValue("PIG_RELEASE_DIGEST", digest), envValue("PIG_REQUIREMENTS", string(requirements)))

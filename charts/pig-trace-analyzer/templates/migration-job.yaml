@@ -53,28 +53,28 @@ spec:
               drop:
                 - ALL
           env:
-            - name: INSTRUCTION_HUB_RUNTIME_BASE_URL
-              value: {{ required "instructionHub.runtimeBaseUrl is required" .Values.instructionHub.runtimeBaseUrl | quote }}
-            - name: INSTRUCTION_HUB_CHART_VERSION
+            - name: PIG_RUNTIME_BASE_URL
+              value: {{ required "pig.runtimeBaseUrl is required" .Values.pig.runtimeBaseUrl | quote }}
+            - name: PIG_CHART_VERSION
               value: {{ .Chart.Version | quote }}
-            - name: INSTRUCTION_HUB_CONFIG_HASH
-              value: {{ required "instructionHub.configHash is required" .Values.instructionHub.configHash | quote }}
+            - name: PIG_CONFIG_HASH
+              value: {{ required "pig.configHash is required" .Values.pig.configHash | quote }}
             {{- include "pig-trace-analyzer.storageEnv" . | nindent 12 }}
-            - name: INSTRUCTION_HUB_LOG_LEVEL
-              value: {{ .Values.instructionHub.logLevel | default "INFO" | quote }}
+            - name: PIG_LOG_LEVEL
+              value: {{ .Values.pig.logLevel | default "INFO" | quote }}
             {{- include "pig-trace-analyzer.observabilityEnv" . | nindent 12 }}
-            - name: INSTRUCTION_HUB_INSTALL_TOKEN
+            - name: PIG_INSTALL_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "pig-trace-analyzer.secretName" . }}
                   key: {{ .Values.secrets.installTokenKey }}
-            - name: INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN
+            - name: PIG_CUSTOMER_POSTGRES_DSN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "pig-trace-analyzer.secretName" . }}
                   key: {{ .Values.secrets.customerPostgresDsnKey }}
             {{- if .Values.secrets.migrationPostgresDsnKey }}
-            - name: INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN
+            - name: PIG_MIGRATION_POSTGRES_DSN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "pig-trace-analyzer.secretName" . }}

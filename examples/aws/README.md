@@ -26,7 +26,7 @@ and create a ConfigMap in the analyzer namespace before applying `PIGDeployment`
 or installing the manual chart. The [deployment example](../pig-deployment.yaml)
 references `pig-postgres-ca` with key `ca.pem` through
 `spec.storage.postgres.caConfigMapRef`. For the manual chart, set
-`instructionHub.postgresCaConfigMapName` and `instructionHub.postgresCaConfigMapKey`.
+`pig.postgresCaConfigMapName` and `pig.postgresCaConfigMapKey`.
 The analyzer and maintenance Jobs use the bundle to verify the RDS certificate
 and hostname. `sslmode=require` does not satisfy the analyzer's TLS requirement.
 

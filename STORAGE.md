@@ -49,8 +49,8 @@ Keep the migration role out of the application role's memberships.
 
 To replace an existing installation's database login with a new application role,
 create the role and grants above before changing the serving Secret. In the current
-worker image, set `INSTRUCTION_HUB_CUSTOMER_POSTGRES_DSN` to the new application
-DSN and `INSTRUCTION_HUB_MIGRATION_POSTGRES_DSN` to the existing owner DSN. Run
+worker image, set `PIG_CUSTOMER_POSTGRES_DSN` to the new application
+DSN and `PIG_MIGRATION_POSTGRES_DSN` to the existing owner DSN. Run
 `pig-trace-analyzer migrate`, then `pig-trace-analyzer db-status`. At the current
 schema revision, migration applies the grants without changing the schema. After
 both commands succeed, update the deployment's credential references and Secret.

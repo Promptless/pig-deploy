@@ -10,7 +10,7 @@
 # PIG deployment
 
 Deploy Promptless Instruction Governance into an existing EKS cluster. Releases
-0.3.0, 0.3.1, and 0.3.3 target AWS; 0.3.4 is being prepared for AWS.
+0.3.0, 0.3.1, 0.3.3, 0.3.4, and 0.3.5 target AWS.
 Azure/AKS and GCP/GKE support is experimental.
 Terraform provisions the customer database, native object storage, network access,
 workload identity, and recovery settings. Helm/GitOps owns collector ingress.
@@ -37,14 +37,15 @@ and targets schema revision 4. The [AWS unattended update test](catalog/testing/
 retains its pinned schema-3 candidates. The 0.3.3 AWS-only owner-signoff exception
 leaves live analysis acceptance pending and does not certify cloud lifecycle checks.
 
-Version **0.3.4** prepares the Go supervisor and moves required collector ingress
-to Helm/GitOps while retaining schema revision 4. Its AWS-only owner-signoff policy requires a separate
-approval bound to the exact candidate artifacts. See the [release preparation](releases/0.3.4.md)
-for remaining steps and the required CRD, RBAC, and ingress ownership handoff
-from 0.3.3. Source preparation does not publish or promote a release.
+Version **0.3.5** pairs the Go supervisor and analyzer through `PIG_*` settings
+and targets schema revision 5. See the [release preparation](releases/0.3.5.md)
+for candidate selection, secret provisioning, and acceptance requirements.
+Source preparation does not publish or promote a release. Installations using
+the Python supervisor must complete the [operator ownership handoff](UPGRADING.md).
 
-The [stable catalog](catalog/stable.json) lists published releases. Versions [0.3.1](releases/acceptance/0.3.1.json)
-and [0.3.3](releases/acceptance/0.3.3.json) use explicit AWS-only owner sign-off
+The [stable catalog](catalog/stable.json) lists published releases. Versions [0.3.1](releases/acceptance/0.3.1.json),
+[0.3.3](releases/acceptance/0.3.3.json), [0.3.4](releases/acceptance/0.3.4.json),
+and [0.3.5](releases/acceptance/0.3.5.json) use explicit AWS-only owner sign-off
 in place of stored acceptance reports. A release becomes eligible
 for automatic updates only after accepted images and charts are publicly
 available and its reviewed catalog promotion is merged. Do not use the existing

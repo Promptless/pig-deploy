@@ -1,8 +1,8 @@
 # Release operations
 
-Version 0.3.4 prepares the Go supervisor and Helm-owned collector ingress, retaining
-the schema-4 analyzer contract from 0.3.3. Follow the [0.3.4 preparation](releases/0.3.4.md)
-for candidate selection and the operator handoff from 0.3.3.
+Version 0.3.5 pairs the supervisor and analyzer through `PIG_*` settings and
+targets schema revision 5. Follow the [0.3.5 preparation](releases/0.3.5.md)
+for candidate selection and installation prerequisites.
 The [stable catalog](catalog/stable.json)
 selects published releases. Local tests are not installation acceptance. Versions 0.3.0
 and 0.3.1 are AWS-only releases. Report-backed acceptance covers a real AWS clean
@@ -108,9 +108,9 @@ check can pass. No customer secret belongs in this repository or its evidence.
    Test evidence and owner sign-off expire after 14 days. `rollbackTo` contains bare manifest digests
    for rollback paths actually included in recovery acceptance.
 
-### Schema-4 candidate
+### Analyzer schema requirements
 
-The 0.3.3 and 0.3.4 requirements accept starting schema revisions 0–3 and target revision 4.
+The 0.3.5 requirements accept starting schema revisions 0–4 and target revision 5.
 The worker also accepts the target revision for retries and configuration rotation.
 The image must advertise `alembic-migrations-v1` and `storage-readiness-v1`.
 Worker CI runs installation and recovery tests on PostgreSQL 15–18 before customer GHCR image

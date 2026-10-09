@@ -110,7 +110,7 @@
         }
       }
     },
-    "instructionHub": {
+    "pig": {
       "type": "object",
       "properties": {
         "logLevel": {

@@ -1,0 +1,14 @@
+{
+  "version": "0.3.5",
+  "sourceCommit": "6d6d59fc4446b42ab2b698ec71a7726cb3c307d2",
+  "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:a73dbafa1caafaf7988a6a75431c2668c261dbf8a501cee550a62388967d3079",
+  "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:b213a2854772e4995968ca20ffff571f2e112d199da2d1a138a11022a35d1ca1",
+  "requirementsDigest": "6e54a80a4a4122f81184ac18eb83602d684bf27520f65cb642520be01cb0dbd9",
+  "rollbackTo": [],
+  "ownerSignOff": {
+    "approvedBy": "adit-chandra",
+    "approvedAt": "2026-10-09T04:51:08Z",
+    "scope": "aws-only",
+    "statement": "The release owner explicitly authorized another AWS-only release and supplied sign-off for publication and stable promotion of PIG 0.3.5. This record binds that approval to the exact source, image digests, and requirements. Candidate verification confirmed anonymous image access, supervisor version and OCI revision, and executed analyzer deployment capabilities. This owner sign-off replaces stored acceptance reports. Live clean installation, canonical trace analysis and Dashboard acknowledgement, patch, minor and major updates, Python-to-Go operator upgrade, pause/pin, blocked resume, secret rotation, supervisor self-update, and recovery remain unverified for these artifacts. No tested rollback paths are advertised. Azure and GCP remain experimental and are not certified by this approval."
+  }
+}

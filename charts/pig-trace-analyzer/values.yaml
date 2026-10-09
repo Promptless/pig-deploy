@@ -47,7 +47,7 @@ gateway:
     pathType: Exact
     servicePortName: http
   tls: []
-instructionHub:
+pig:
   runtimeBaseUrl: https://api.gopromptless.ai
   configHash: ''
   storageBackend: postgres_s3
@@ -59,7 +59,7 @@ instructionHub:
     quietWindowHours: 0.5
     activationAt: ''
     catalogEnabled: false
-    mirrorRoot: /var/lib/instruction-hub/analysis-mirrors
+    mirrorRoot: /var/lib/pig/analysis-mirrors
     modelApi:
       provider: openai
       authentication: api_key

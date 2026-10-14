@@ -7,7 +7,7 @@ The [stable catalog](catalog/stable.json)
 selects published releases. Local tests are not installation acceptance. Versions 0.3.0
 and 0.3.1 are AWS-only releases. Report-backed acceptance covers a real AWS clean
 installation and canonical pipeline, plus the unattended 0.3.0 to 0.3.1 patch update
-for 0.3.1. Versions 0.3.1, 0.3.3, 0.3.4, and 0.3.5 may use the explicit AWS-only owner sign-off
+for 0.3.1. Versions 0.3.1, 0.3.3, 0.3.4, 0.3.5, and 0.3.6 may use the explicit AWS-only owner sign-off
 described below. The 0.3.3 approval leaves live analysis acceptance pending.
 Azure and GCP support remains experimental; these releases do not
 establish cloud validation for their native adapters or deployment modules.
@@ -86,14 +86,14 @@ check can pass. No customer secret belongs in this repository or its evidence.
    A reviewer checks report contents. The workflow validates structure, binding,
    and freshness; it does not independently execute or audit the evidence URLs.
 
-   **Owner sign-off for 0.3.1, 0.3.3, 0.3.4, and 0.3.5:** the release owner may explicitly approve AWS-only
+   **Owner sign-off for 0.3.1, 0.3.3, 0.3.4, 0.3.5, and 0.3.6:** the release owner may explicitly approve AWS-only
    publication and stable promotion in place of stored test reports. Retain all
    exact source, image, and requirements identities, omit the cloud reports, and
    supply `ownerSignOff` with `approvedBy`, timezone-aware `approvedAt`,
    `scope: "aws-only"`, and a `statement` explaining the approval. This is an
    approval record, not a claim that report-backed testing was verified. It must
    not contain `testedAt`, invented report URLs, or advertised rollback paths.
-   The exception applies only to 0.3.1, 0.3.3, 0.3.4, and 0.3.5; image execution, capabilities,
+   The exception applies only to 0.3.1, 0.3.3, 0.3.4, 0.3.5, and 0.3.6; image execution, capabilities,
    artifact integrity, anonymous access, and catalog review remain mandatory.
    The 0.3.3 record must document pending canonical analysis acceptance and the
    unverified cloud lifecycle checks. It does not certify Azure or GCP support.
@@ -104,6 +104,8 @@ check can pass. No customer secret belongs in this repository or its evidence.
    The 0.3.5 record binds the owner's AWS-only release authorization to verified
    candidates and lists the unverified installation, upgrade, recovery, and
    canonical analysis checks.
+   The 0.3.6 record also identifies the unverified environment-contract bootstrap
+   and keeps analysis disabled with canonical acceptance pending.
 5. Compute `requirementsDigest` as SHA-256 of the requirements model's canonical
    JSON: parse `releases/requirements/VERSION.json` with `Requirements`, dump with
    aliases, then serialize with sorted keys and compact separators. This internal

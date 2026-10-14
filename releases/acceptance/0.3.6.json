@@ -1,0 +1,14 @@
+{
+  "version": "0.3.6",
+  "sourceCommit": "db79db5a2c8a0e882bc888a870d6b407e5d5e76e",
+  "analyzerImage": "ghcr.io/promptless/pig-trace-analyzer@sha256:0379f9d768597a08334e5854c2cd39ffbc3817ef737eb30494d080a28416481e",
+  "supervisorImage": "ghcr.io/promptless/pig-supervisor@sha256:b326ba6a8680cc4b594278b1a62098da613e7f0dd38113c56eeaf725eab79033",
+  "requirementsDigest": "6e54a80a4a4122f81184ac18eb83602d684bf27520f65cb642520be01cb0dbd9",
+  "rollbackTo": [],
+  "ownerSignOff": {
+    "approvedBy": "adit-chandra",
+    "approvedAt": "2026-10-14T20:21:41Z",
+    "scope": "aws-only",
+    "statement": "The release owner explicitly approved the version-specific policy exception for AWS-only publication and stable promotion of PIG 0.3.6 after reviewing these exact source and image identities and the missing live acceptance reports. Candidate verification confirmed anonymous image access, supervisor version and OCI revision, and executed analyzer deployment capabilities. This owner sign-off replaces stored acceptance reports. Live clean installation, canonical trace analysis and hosted and Dashboard acknowledgement, patch, minor and major upgrades including the 0.3.4 environment-contract bootstrap and Python-to-Go upgrade, pause/pin, blocked resume, secret rotation, supervisor self-update, and recovery remain unverified for these artifacts. Analysis remains disabled by owner policy and canonical acceptance remains pending. No tested rollback paths are advertised. Azure and GCP remain experimental and are not certified by this approval."
+  }
+}

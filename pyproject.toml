@@ -2,7 +2,7 @@
 name = "pig-supervisor"
 version = "0.3.6"
 requires-python = ">=3.11"
-dependencies = ["httpx>=0.28,<1", "pydantic>=2.11,<3", "packaging>=24", "PyYAML>=6,<7"]
+dependencies = ["httpx>=0.28,<1", "pydantic>=2.14.1,<3", "packaging>=24", "PyYAML>=6,<7"]
 [project.scripts]
 pig-release = "pig_supervisor.publication:main"
 pig-release-inspect = "pig_supervisor.inspect_release:main"

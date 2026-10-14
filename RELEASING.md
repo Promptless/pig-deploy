@@ -1,7 +1,7 @@
 # Release operations
 
-Version 0.3.5 pairs the supervisor and analyzer through `PIG_*` settings and
-targets schema revision 5. Follow the [0.3.5 preparation](releases/0.3.5.md)
+Version 0.3.6 pairs the supervisor and analyzer through `PIG_*` settings and
+targets schema revision 5. Follow the [0.3.6 preparation](releases/0.3.6.md)
 for candidate selection and installation prerequisites.
 The [stable catalog](catalog/stable.json)
 selects published releases. Local tests are not installation acceptance. Versions 0.3.0
@@ -113,7 +113,7 @@ check can pass. No customer secret belongs in this repository or its evidence.
 
 ### Analyzer schema requirements
 
-The 0.3.5 requirements accept starting schema revisions 0–4 and target revision 5.
+The 0.3.6 requirements accept starting schema revisions 0–4 and target revision 5.
 The worker also accepts the target revision for retries and configuration rotation.
 The image must advertise `alembic-migrations-v1` and `storage-readiness-v1`.
 Worker CI runs installation and recovery tests on PostgreSQL 15–18 before customer GHCR image
@@ -159,23 +159,26 @@ administrator fixes package visibility.
 Both OCI charts must pull anonymously and match their package checksums. The
 workflow then creates the immutable source tag and GitHub release, anonymously
 downloads every asset, and compares exact bytes and `SHA256SUMS`. It opens a
-**draft catalog promotion PR**; it never merges that PR. A partial existing GitHub
+**draft manifest-retention PR**; it never merges a PR. A partial existing GitHub
 release with missing or mismatched assets fails closed and needs operator repair
 or a new version, without overwriting already published bytes.
 
-The promotion uses two commits: immutable manifest first, then a stable-index
-entry pointing at that commit. Review the immutable URLs and evidence before
-merging. If PR creation is interrupted after the branch push, rerun publication:
-it verifies the existing manifest bytes, digest, and reachable immutable commit,
-then creates or locates the PR without rewriting the branch. A mismatched branch
-or closed, unmerged PR requires operator review.
-If organization policy blocks Actions from creating PRs, the operator can open a
-draft PR from the published `release/catalog-VERSION` branch to `main`, then rerun
-publication. The retry verifies the branch and reuses that PR; organization-wide
-Actions permissions do not need to change.
-Merging makes the release eligible for automatic updates, including
-major versions. Do not squash away or delete the manifest commit referenced by
-its URL. Keep releases, tags, and those commits reachable and protected.
+Promotion uses two reviewed PRs. The first merges the immutable manifest into
+`main` without selecting the release. Rerun publication after that merge to open
+the stable catalog PR, whose manifest URL references the retained commit on
+`main`. Either PR can use the repository's normal squash or rebase merge method.
+Review the immutable URLs and evidence before merging the stable catalog PR;
+that merge makes the release eligible for automatic updates, including major
+versions. Keep releases, tags, and referenced commits reachable and protected.
+
+If PR creation is interrupted after a branch push, rerun publication. It verifies
+the existing manifest bytes, digest, and reachable immutable commit, then creates
+or locates the matching PR without rewriting the branch. A mismatched branch or
+closed, unmerged PR requires operator review. If organization policy blocks
+Actions from creating PRs, the operator can open a draft PR from the published
+`release/manifest-VERSION` or `release/catalog-VERSION` branch to `main`, then
+rerun publication. The retry verifies the branch and reuses that PR;
+organization-wide Actions permissions do not need to change.
 
 ## Scope of acceptance
 

@@ -116,7 +116,7 @@ jobs:
           done
           cd "$RELEASE_OUTPUT/anonymous"
           sha256sum --check SHA256SUMS
-      - name: Open an immutable catalog promotion draft
+      - name: Open the next reviewed promotion draft
         run: |
           # Promotion data starts from main; tooling stays at the reviewed workflow commit.
           git switch --detach origin/main

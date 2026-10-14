@@ -1,7 +1,7 @@
 # Release operations
 
-Version 0.3.5 pairs the supervisor and analyzer through `PIG_*` settings and
-targets schema revision 5. Follow the [0.3.5 preparation](releases/0.3.5.md)
+Version 0.3.6 pairs the supervisor and analyzer through `PIG_*` settings and
+targets schema revision 5. Follow the [0.3.6 preparation](releases/0.3.6.md)
 for candidate selection and installation prerequisites.
 The [stable catalog](catalog/stable.json)
 selects published releases. Local tests are not installation acceptance. Versions 0.3.0
@@ -113,7 +113,7 @@ check can pass. No customer secret belongs in this repository or its evidence.
 
 ### Analyzer schema requirements
 
-The 0.3.5 requirements accept starting schema revisions 0–4 and target revision 5.
+The 0.3.6 requirements accept starting schema revisions 0–4 and target revision 5.
 The worker also accepts the target revision for retries and configuration rotation.
 The image must advertise `alembic-migrations-v1` and `storage-readiness-v1`.
 Worker CI runs installation and recovery tests on PostgreSQL 15–18 before customer GHCR image

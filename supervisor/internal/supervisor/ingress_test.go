@@ -22,3 +22,22 @@ func TestIngressIsExternalToSupervisor(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyzerPodsOptIntoDatadogLogCollection(t *testing.T) {
+	d := exampleDeployment(t)
+	spec, err := ParseSpec(child(d, "spec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `[{"source":"python","service":"pig-analyzer"}]`
+	templates := map[string]Obj{
+		"deployment": child(AnalyzerResources(d, spec, Release{}, "hash")[0], "spec", "template"),
+		"job":        child(JobResource(d, spec, Release{}, "digest", "hash", "preflight", 0, "id"), "spec", "template"),
+	}
+	for kind, template := range templates {
+		container := str(object(items(child(template, "spec")["containers"])[0]), "name")
+		if got := str(child(template, "metadata", "annotations"), "ad.datadoghq.com/"+container+".logs"); got != want {
+			t.Fatalf("%s pod must carry the Datadog logs annotation for container %q, got %q", kind, container, got)
+		}
+	}
+}

@@ -60,6 +60,9 @@ func (r *replay) call(operation string, args ...any) (any, error) {
 	if operation == "request" {
 		expected = append(expected, child(e, "kwargs")["json"])
 	}
+	if operation == "apply" {
+		expected = []any{withDatadogLogsAnnotation(normalize(expected[0]))}
+	}
 	a, b := normalize(expected), normalize(args)
 	if !reflect.DeepEqual(a, b) {
 		x, _ := json.MarshalIndent(a, "", "  ")
@@ -105,6 +108,17 @@ func (r *replay) RoundTrip(req *http.Request) (*http.Response, error) {
 		r.t.Fatalf("HTTP URL: want %s, got %s", str(e, "url"), req.URL)
 	}
 	return &http.Response{StatusCode: number(e, "status"), Header: http.Header{}, Body: io.NopCloser(strings.NewReader(str(e, "body"))), Request: req}, nil
+}
+
+// The Python baseline predates the Datadog logs annotation on analyzer pods.
+// Add it to recorded pod templates so every other field still matches exactly.
+func withDatadogLogsAnnotation(v any) any {
+	document := object(v)
+	annotations := child(document, "spec", "template", "metadata", "annotations")
+	if _, ok := annotations["governance.promptless.ai/config-hash"]; ok {
+		annotations["ad.datadoghq.com/analyzer.logs"] = `[{"source":"python","service":"pig-analyzer"}]`
+	}
+	return document
 }
 
 // Only presentation differences are normalized. Digests, names, phase order,

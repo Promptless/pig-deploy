@@ -5,6 +5,7 @@ package supervisor
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -20,6 +21,17 @@ import (
 var capabilities = []string{"alembic-migrations-v1", "storage-readiness-v1", "native-storage-v1", "migration-ledger-v1", "installation-identity-v1", "controller-self-update-v1", "crd-update-v1"}
 var phases = []string{"preflight", "quiesce", "migration", "rollout", "verify", "supervisor", "complete"}
 var deploymentName = regexp.MustCompile(`^[a-z]([-a-z0-9]*[a-z0-9])?$`)
+
+// conditionReason bounds a Job's self-reported failure reason to the
+// Kubernetes condition reason format before it is written to status.
+var conditionReason = regexp.MustCompile(`^[A-Z][A-Za-z0-9]{0,63}$`)
+
+const awaitingAcceptanceMessage = "Enroll a host, ingest a real trace, and wait for analysis and Dashboard synchronization."
+
+var acceptanceFailureMessages = map[string]string{
+	"AwaitingCanonicalAcceptance": awaitingAcceptanceMessage,
+	"AnalysisNotAllowed":          "Analysis is off for this installation in Promptless, or no instruction repository is selected. Acceptance requires a succeeded analysis; it completes after analysis is turned on.",
+}
 
 const crdPath = "/apis/apiextensions.k8s.io/v1/customresourcedefinitions/pigdeployments.governance.promptless.ai"
 
@@ -58,12 +70,49 @@ func Condition(status Obj, name string, truth bool, reason, message string, gene
 }
 func acceptanceCondition(status Obj, digest, hash string, generation int, now time.Time) {
 	accepted := str(status, "acceptedConfigurationHash") == hash && str(status, "acceptedReleaseDigest") == digest
-	reason, message := "AwaitingCanonicalAcceptance", "Enroll a host, ingest a real trace, and wait for analysis and Dashboard synchronization."
+	reason, message := "AwaitingCanonicalAcceptance", awaitingAcceptanceMessage
 	if accepted {
 		reason = "CanonicalSuccess"
 		message = "An enrolled host has a readable canonical object, succeeded analysis, and hosted acknowledgement."
+	} else if failure := str(status, "acceptanceFailureReason"); failure != "" {
+		reason = failure
+		message = acceptanceFailureMessages[failure]
+		if message == "" {
+			message = fmt.Sprintf("The latest acceptance check failed with %s. Inspect the newest acceptance Job's Pod; checks retry with backoff up to hourly.", failure)
+		}
 	}
 	Condition(status, "Acceptance", accepted, reason, message, generation, now)
+}
+
+// AcceptanceRetryDelay doubles the two-minute retry with each consecutive
+// failed acceptance check, up to the hourly recheck of an accepted release.
+func AcceptanceRetryDelay(failures int) time.Duration {
+	delay := 2 * time.Minute
+	for range failures {
+		if delay >= time.Hour {
+			break
+		}
+		delay *= 2
+	}
+	return min(delay, time.Hour)
+}
+
+// JobFailureReason returns the bounded reason a deployment command wrote to its
+// termination log, or "" when no Pod recorded one (for example, a deadline).
+func JobFailureReason(pods []Obj) string {
+	for _, pod := range pods {
+		for _, v := range items(child(pod, "status")["containerStatuses"]) {
+			var result struct {
+				OK     bool   `json:"ok"`
+				Reason string `json:"reason"`
+			}
+			message := str(child(object(v), "state", "terminated"), "message")
+			if json.Unmarshal([]byte(message), &result) == nil && !result.OK && conditionReason.MatchString(result.Reason) {
+				return result.Reason
+			}
+		}
+	}
+	return ""
 }
 func HelmReleaseName(release Obj) string {
 	spec := child(release, "spec")
@@ -719,9 +768,23 @@ func (c *Controller) acceptance(ctx context.Context, d Obj, spec DeploymentSpec,
 	if outcome != "" {
 		next := str(status, "acceptanceNextCheck")
 		if next == "" {
-			delay := 2 * time.Minute
+			delay := time.Hour
 			if accepted {
-				delay = time.Hour
+				delete(status, "acceptanceFailures")
+				delete(status, "acceptanceFailureReason")
+			} else {
+				pods, err := c.Kube.List(ctx, "Pod", c.Namespace, "governance.promptless.ai/job="+name)
+				if err != nil {
+					return err
+				}
+				if reason := JobFailureReason(pods); reason != "" {
+					status["acceptanceFailureReason"] = reason
+				} else {
+					delete(status, "acceptanceFailureReason")
+				}
+				failures := number(status, "acceptanceFailures")
+				delay = AcceptanceRetryDelay(failures)
+				status["acceptanceFailures"] = failures + 1
 			}
 			status["acceptanceNextCheck"] = timestamp(now.Add(delay))
 		} else {

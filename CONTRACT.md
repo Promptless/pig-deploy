@@ -263,6 +263,14 @@ A recorded acceptance remains evidence for that release and configuration;
 every later trace has succeeded. Confirm the matching trace and analysis in the
 Dashboard during installation acceptance.
 
+Until acceptance succeeds, the condition reason is the reason the latest
+acceptance Job reported, such as `AnalysisNotAllowed` when analysis is off for
+the installation in Promptless. A Job that reports no reason, such as one that
+reached its deadline, leaves `AwaitingCanonicalAcceptance`. Failed checks retry
+after two minutes, doubling with each consecutive failure up to hourly, so an
+installation with analysis deliberately off is checked hourly. A successful
+check resets the backoff and is rechecked hourly.
+
 ## Manual chart
 
 The [manual chart](charts/pig-trace-analyzer/README.md) is for operator-managed

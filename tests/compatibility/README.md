@@ -34,6 +34,15 @@ resources, or operations. Chart tests cover TLS and collector routes; Kubernetes
 integration covers Helm adoption with the same Ingress UID, denied supervisor
 ingress access, and unchanged analyzer configuration hashes after ingress edits.
 
+Acceptance failure handling also differs from the baseline by design. After a
+failed acceptance Job, the Go supervisor lists the Job's Pods to read the
+reason the analyzer wrote to its termination log, and counts consecutive
+failures in `status.acceptanceFailures` to back off retries from two minutes to
+hourly. The one recorded reconciliation that observes a newly failed acceptance
+Job (`test_acceptance_deadline_without_pods_schedules_new_check`, which has no
+Pods) includes that Pod list and failure count. Go unit tests cover reported
+reasons and the backoff schedule.
+
 The baseline tests generate UUIDs, so new captures are behaviorally equivalent
 rather than byte-for-byte reproducible. `pig_capture.py` is a baseline-only
 pytest plugin, not part of the supervisor runtime or current Python test suite.
